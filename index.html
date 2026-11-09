@@ -547,15 +547,29 @@ function ask(msg, onYes){
 }
 
 const canSpeak = 'speechSynthesis' in window;
+/* 發音：只挑自然的人聲。蘋果裝置內建很多特效聲音（Bad News、Superstar、Zarvox…），聽起來像吶喊或唱歌，全部排除。 */
+const NOVELTY = /albert|bad ?news|bahh|bells|boing|bubbles|cellos|good ?news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|ralph|kathy|princess|deranged|hysterical|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|bruce|agnes|vicki|victoria/i;
+const PREFERRED = [/samantha/i, /\bava\b/i, /allison/i, /susan/i, /google us english/i, /microsoft (aria|jenny|ana|michelle|guy|christopher|eric).*natural/i,
+                   /microsoft (aria|jenny|zira|david|mark)/i, /\balex\b/i, /google uk english female/i, /karen|daniel|moira|tessa|serena/i];
 let voice = null;
+function englishVoices(){
+  if(!canSpeak) return [];
+  return speechSynthesis.getVoices().filter(v => /^en[-_]/i.test(v.lang) && !NOVELTY.test(v.name));
+}
+function pickVoice(){
+  const vs = englishVoices();
+  if(S.voice){ const v = vs.find(x => x.name === S.voice); if(v) return v; }
+  for(const re of PREFERRED){ const v = vs.find(x => re.test(x.name) && /en[-_]US/i.test(x.lang)) || vs.find(x => re.test(x.name)); if(v) return v; }
+  return vs.find(x => /en[-_]US/i.test(x.lang) && x.localService) || vs.find(x => /en[-_]US/i.test(x.lang)) || vs[0] || null;
+}
 function speak(text){
   if(!canSpeak) return;
   try{
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.85;
-    if(!voice) voice = speechSynthesis.getVoices().find(v => /en[-_]US/i.test(v.lang)) || null;
-    if(voice) u.voice = voice;
+    if(!voice) voice = pickVoice();
+    if(voice){ u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+    u.rate = 0.88; u.pitch = 1; u.volume = 1;
     speechSynthesis.speak(u);
   }catch(e){}
 }
@@ -1406,6 +1420,13 @@ function showInfo(){
   scrollTo(0,0);
 }
 
+function fillVoices(sel){
+  const vs = englishVoices(), cur = pickVoice();
+  sel.innerHTML = vs.length
+    ? vs.map(v => `<option value="${esc(v.name)}" ${cur && v.name === cur.name ? 'selected' : ''}>${esc(v.name)}（${esc(v.lang)}）</option>`).join('')
+    : '<option>這台裝置沒有英文發音</option>';
+}
+
 /* ---------- 畫面：說明 ---------- */
 function showHelp(){
   $app.innerHTML = `${topbar('玩法說明')}
@@ -1420,13 +1441,27 @@ function showHelp(){
     </div>
     <h3 class="lead" style="font-family:var(--display);font-weight:900;color:var(--onDark);font-size:18px;letter-spacing:.08em;margin:6px 0 10px">怪物圖鑑</h3>
     <div class="bestiary">${Object.entries(KINDS).map(([k,K]) => `<div class="beast"><canvas data-kind="${k}" aria-hidden="true"></canvas><div><b>${K.name}</b><p>${K.desc}</p></div></div>`).join('')}</div>
+    ${canSpeak ? `<h3 class="lead" style="font-family:var(--display);font-weight:900;color:var(--onDark);font-size:18px;letter-spacing:.08em;margin:6px 0 10px">發音設定</h3>
+    <div class="sheet" style="padding:14px 16px;margin-bottom:14px">
+      <p style="margin:0 0 10px;font-size:15px">會自動選擇最自然的英文聲音。如果這台裝置的發音聽起來怪怪的，可以在這裡換一個，再按試聽確認。</p>
+      <div class="row" style="align-items:center">
+        <select id="voiceSel" aria-label="選擇發音聲音" style="flex:1 1 200px;min-height:44px;border-radius:8px;border:1.5px solid var(--line);background:var(--panel2);color:var(--ink);font:inherit;padding:0 10px"></select>
+        <button class="btn alt sm" id="voiceTry">${IC.speaker}試聽</button>
+      </div>
+    </div>` : ''}
     <button class="btn quiet full" id="reset">清除這台裝置的進度</button>`;
+  const sel = document.getElementById('voiceSel');
+  if(sel){
+    fillVoices(sel);
+    sel.onchange = () => { S.voice = sel.value; save(); voice = null; speak('The brave boy helped his friend.'); };
+    document.getElementById('voiceTry').onclick = () => speak('The brave boy helped his friend.');
+  }
   document.querySelectorAll('[data-kind]').forEach(cv => paintKind(cv, cv.dataset.kind));
   document.getElementById('reset').onclick = () => ask('確定要清除所有星星和錯題紀錄嗎？', () => { S.stars = {}; S.wrong = {}; S.seen = {}; save(); showMap(); });
   scrollTo(0,0);
 }
 
-if(canSpeak) speechSynthesis.onvoiceschanged = () => { voice = null; };
+if(canSpeak) speechSynthesis.onvoiceschanged = () => { voice = null; const sel = document.getElementById('voiceSel'); if(sel) fillVoices(sel); };
 showMap();
 </script>
 </body>
