@@ -871,7 +871,7 @@ function showMap(){
   $app.innerHTML = `
     <header class="brand">
       <div><span class="en">Lexile Reading Rex</span><h1>藍思閱讀單字王</h1></div>
-      <p>藍思桌遊單字・國小六年級　答對單字守住城堡，成為單字王</p>
+      <p>藍思閱讀單字　答對單字守住城堡，成為單字王</p>
     </header>
     <nav class="weeks" aria-label="選擇週次">${WEEKS.map(w => `<button class="wk ${w===wk?'on':''}" data-week="${w.id}">${esc(w.name)}</button>`).join('')}</nav>
     <div class="stages">
@@ -901,7 +901,7 @@ function showMap(){
       <button class="btn quiet" id="toHelp">玩法說明</button>
       <button class="btn quiet" id="toInfo">相關資訊</button>
     </div>
-    <p class="foot">單字與例句取自講義《藍思桌遊單字 x 閱讀技巧》。進度只存在這台裝置的瀏覽器，不會上傳。</p>`;
+    <p class="foot">單字與例句取自藍思閱讀單字講義。進度只存在這台裝置的瀏覽器，不會上傳。</p>`;
   document.querySelectorAll('[data-thumb]').forEach(cv => paintStill(cv, cv.dataset.thumb));
   document.querySelectorAll('[data-week]').forEach(b => b.onclick = () => { S.week = b.dataset.week; save(); showMap(); });
   document.querySelectorAll('[data-learn]').forEach(b => b.onclick = () => showLearn(b.dataset.learn));
