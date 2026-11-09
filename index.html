@@ -55,6 +55,17 @@ button:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 .stage .head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .stage h2{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.06em;margin:0}
 .stage .no{font-family:var(--latin);font-weight:700;color:var(--muted);font-size:14px;letter-spacing:.1em}
+.secs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px;background:var(--page2);padding:6px;border-radius:12px}
+.sec{display:grid;gap:0;padding:10px 8px;border-radius:8px;text-align:center;color:var(--onDarkMuted)}
+.sec b{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:.08em;color:var(--onDark)}
+.sec span{font-size:13px}
+.sec.on{background:var(--panel);color:var(--muted)}
+.sec.on b{color:var(--ink)}
+.ulist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:12px}
+.ucard{background:var(--panel);color:var(--ink);border-radius:10px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.uhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;color:var(--muted);font-size:14px}
+.uhead h3{margin:0;font-size:24px;font-weight:800;color:var(--ink)}
+.peek{margin:0;color:var(--muted);font-size:16px;line-height:1.4}
 .weeks{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
 .wk{padding:8px 16px;border-radius:999px;font-weight:700;box-shadow:inset 0 0 0 1.5px #ffffff33;color:var(--onDark)}
 .wk.on{background:var(--ochre);color:#1c1608;box-shadow:none}
@@ -236,36 +247,262 @@ const WEEKS = [
     ]}
   ]},
 ];
-const PART = 10;                                  // 每關幾隻敵人（主題會依序切成好幾關）
+
+/* 高頻單字區：取自《藍思閱讀高頻單字》250L–600L，Unit 1～8。
+   講義第 6 單元原本就跳號（沒有第 6 個字），所以是 24 字。
+   desert、daring、dread 講義沒附音標，是補上的；admire 例句講義漏了開頭的 I，已補上；responsible 補上詞性 adj.。 */
+const HF = { id:'hf', name:'高頻單字', lexile:'250L–600L', units:[
+    { id:'u1', en:'Unit 1', zh:'Unit 1', theme:'forest', words:[
+      {w:"brave", ipa:"brev", pos:"adj.", zh:"勇敢的", ex:"The brave firefighter ran into the burning house to save a child.", exZh:"那位勇敢的消防員衝進著火的房子裡去救小孩。"},
+      {w:"chase", ipa:"tʃes", pos:"v.", zh:"追逐", ex:"The dog chased the ball across the park.", exZh:"狗在公園裡追著球跑。"},
+      {w:"hide", ipa:"haɪd", pos:"v.", zh:"躲藏", ex:"The children hid behind the tree during the game.", exZh:"小孩在遊戲時躲在樹後面。"},
+      {w:"assist", ipa:"əˈsɪst", pos:"v.", zh:"幫助", ex:"The teacher asked the students to assist each other during the project.", exZh:"老師請學生在專題報告時互相幫助。"},
+      {w:"behavior", ipa:"bɪˈhevjɚ", pos:"n.", zh:"行為", ex:"The teacher praised his good behavior in class.", exZh:"老師稱讚他在課堂上的良好行為。"},
+      {w:"bury", ipa:"ˈbɛrɪ", pos:"v.", zh:"埋", ex:"They buried the old tree after it fell during the storm.", exZh:"那棵老樹在暴風雨中倒下後被埋起來了。"},
+      {w:"confident", ipa:"ˈkɑnfədənt", pos:"adj.", zh:"有自信的", ex:"She felt confident before giving her speech on stage.", exZh:"她在上台演講前感到很有自信。"},
+      {w:"amazing", ipa:"əˈmezɪŋ", pos:"adj.", zh:"令人驚訝的", ex:"The view from the top of the mountain was amazing.", exZh:"從山頂看到的景色令人驚嘆。"},
+      {w:"create", ipa:"krɪˈet", pos:"v.", zh:"創造", ex:"The students worked together to create a short film.", exZh:"學生們一起合作製作了一部短片。"},
+      {w:"discover", ipa:"dɪsˈkʌvɚ", pos:"v.", zh:"發現", ex:"Scientists discovered a new kind of plant in the rainforest.", exZh:"科學家在熱帶雨林中發現了一種新植物。"},
+      {w:"improve", ipa:"ɪmˈpruv", pos:"v.", zh:"改善", ex:"You can improve your English by reading every day.", exZh:"你可以透過每天閱讀來提升你的英文。"},
+      {w:"protect", ipa:"prəˈtɛkt", pos:"v.", zh:"保護", ex:"We must protect the environment for future generations.", exZh:"我們必須為下一代保護環境。"},
+      {w:"recognize", ipa:"ˈrɛkəgˌnaɪz", pos:"v.", zh:"辨認", ex:"I didn’t recognize him because he changed his hairstyle.", exZh:"我沒認出他，因為他換了髮型。"},
+      {w:"respect", ipa:"rɪˈspɛkt", pos:"v.", zh:"尊重", ex:"We should respect people who have different opinions.", exZh:"我們應該尊重持不同意見的人。"},
+      {w:"unusual", ipa:"ʌnˈjuʒuəl", pos:"adj.", zh:"不尋常的", ex:"It’s unusual to see snow in this city.", exZh:"在這座城市看到下雪是很少見的事。"},
+      {w:"determine", ipa:"dɪˈtɝmɪn", pos:"v.", zh:"決定", ex:"She determined to study abroad next year.", exZh:"她決定明年出國留學。"},
+      {w:"insect", ipa:"ˈɪnˌsɛkt", pos:"n.", zh:"昆蟲", ex:"Bees are important insects because they help plants grow.", exZh:"蜜蜂是重要的昆蟲，因為牠們幫助植物生長。"},
+      {w:"curious", ipa:"ˈkjʊrɪəs", pos:"adj.", zh:"好奇的", ex:"The little boy was curious about how airplanes fly.", exZh:"那個小男孩對飛機如何飛行感到好奇。"},
+      {w:"bold", ipa:"bold", pos:"adj.", zh:"大膽的", ex:"She made a bold decision to start her own business.", exZh:"她勇敢地決定創業。"},
+      {w:"frightened", ipa:"ˈfraɪtnd", pos:"adj.", zh:"感到驚嚇的", ex:"The child looked frightened when he heard the loud noise.", exZh:"那孩子聽到巨響時露出害怕的表情。"},
+      {w:"generous", ipa:"ˈdʒɛnərəs", pos:"adj.", zh:"大方的", ex:"He is always generous with his time and money.", exZh:"他總是樂於花時間與金錢幫助別人。"},
+      {w:"support", ipa:"səˈpɔrt", pos:"n./v.", zh:"支持", ex:"Her family gave her strong support when she started her new job.", exZh:"她開始新工作時，家人給了她很大的支持。"},
+      {w:"volunteer", ipa:"ˌvɑlənˈtɪr", pos:"v.", zh:"自願", ex:"Many students volunteer to help clean the beach.", exZh:"許多學生自願幫忙清理海灘。"},
+      {w:"receive", ipa:"rɪˈsiv", pos:"v.", zh:"收到", ex:"I received a birthday card from my best friend.", exZh:"我收到了好朋友寄來的生日卡片。"},
+      {w:"chemical", ipa:"ˈkɛmɪkəl", pos:"n.", zh:"化學物質", ex:"Some cleaning products contain harmful chemicals.", exZh:"有些清潔用品含有有害的化學物質。"},
+    ]},
+    { id:'u2', en:'Unit 2', zh:'Unit 2', theme:'ocean', words:[
+      {w:"deal", ipa:"dil", pos:"n.", zh:"交易；協議", ex:"We made a deal to share the profit equally.", exZh:"我們達成協議，要平分利潤。"},
+      {w:"caring", ipa:"ˈkɛrɪŋ", pos:"adj.", zh:"有愛心的", ex:"She is a caring nurse who always helps her patients.", exZh:"她是一位很有愛心的護士，總是幫助病人。"},
+      {w:"wonderful", ipa:"ˈwʌndɚfəl", pos:"adj.", zh:"美好的", ex:"We had a wonderful time at the beach last weekend.", exZh:"上週末我們在海灘玩得很愉快。"},
+      {w:"huge", ipa:"hjudʒ", pos:"adj.", zh:"巨大的", ex:"The elephant is a huge animal with big ears.", exZh:"大象是耳朵很大的巨型動物。"},
+      {w:"merry", ipa:"ˈmɛrɪ", pos:"adj.", zh:"快樂的", ex:"Everyone was merry and singing during the festival.", exZh:"節日期間大家都很開心地唱歌。"},
+      {w:"useful", ipa:"ˈjusfəl", pos:"adj.", zh:"有用的", ex:"This website is very useful for learning English.", exZh:"這個網站對學英文非常有用。"},
+      {w:"poisonous", ipa:"ˈpɔɪzənəs", pos:"adj.", zh:"有毒的", ex:"Some mushrooms are poisonous, so don’t eat them.", exZh:"有些蘑菇有毒，所以不要亂吃。"},
+      {w:"role", ipa:"rol", pos:"n.", zh:"角色", ex:"He played an important role in the school play.", exZh:"他在學校的戲劇中扮演重要角色。"},
+      {w:"lead", ipa:"lid", pos:"v.", zh:"領導", ex:"The guide will lead us to the top of the mountain.", exZh:"導遊會帶領我們登上山頂。"},
+      {w:"male", ipa:"mel", pos:"adj.", zh:"男性的", ex:"Only male birds sing to attract females.", exZh:"只有雄鳥會唱歌來吸引雌鳥。"},
+      {w:"ordinary", ipa:"ˈɔrdnˌɛrɪ", pos:"adj.", zh:"普通的；平凡的", ex:"She lives an ordinary life.", exZh:"她過著平凡的生活。"},
+      {w:"forgetful", ipa:"fɚˈgɛtfəl", pos:"adj.", zh:"健忘的", ex:"My grandpa is forgetful and often loses his keys.", exZh:"我爺爺很健忘，常常弄丟鑰匙。"},
+      {w:"dig", ipa:"dɪg", pos:"v.", zh:"挖", ex:"The dog likes to dig holes in the garden.", exZh:"那隻狗喜歡在花園裡挖洞。"},
+      {w:"wise", ipa:"waɪz", pos:"adj.", zh:"有智慧的", ex:"It was wise of you to save some money for the future.", exZh:"你為未來存錢是明智的做法。"},
+      {w:"crawl", ipa:"krɔl", pos:"v.", zh:"爬", ex:"The baby is learning to crawl across the floor.", exZh:"那個嬰兒正在學爬過地板。"},
+      {w:"accept", ipa:"əkˈsɛpt", pos:"v.", zh:"接受", ex:"He accepted the invitation to the party.", exZh:"他接受了派對的邀請。"},
+      {w:"crab", ipa:"kræb", pos:"n.", zh:"螃蟹", ex:"We saw many crabs on the beach at night.", exZh:"晚上我們在海灘上看到許多螃蟹。"},
+      {w:"bucket", ipa:"ˈbʌkɪt", pos:"n.", zh:"水桶", ex:"He filled the bucket with cold water.", exZh:"他用冷水裝滿水桶。"},
+      {w:"steady", ipa:"ˈstɛdɪ", pos:"adj.", zh:"穩定的", ex:"Keep your hand steady while you paint.", exZh:"畫畫時請保持手穩。"},
+      {w:"lift", ipa:"lɪft", pos:"v.", zh:"舉起", ex:"Can you help me lift this heavy box?", exZh:"你能幫我抬起這個重箱子嗎？"},
+      {w:"manage", ipa:"ˈmænɪdʒ", pos:"v.", zh:"管理", ex:"She managed to finish the work on time.", exZh:"她設法準時完成了工作。"},
+      {w:"branch", ipa:"bræntʃ", pos:"n.", zh:"樹枝", ex:"The bird built its nest on a tree branch.", exZh:"那隻鳥在樹枝上築巢。"},
+      {w:"bother", ipa:"ˈbɑðɚ", pos:"v.", zh:"打擾", ex:"Don’t bother me while I’m studying.", exZh:"我在讀書的時候不要打擾我。"},
+      {w:"graze", ipa:"grez", pos:"v.", zh:"吃草", ex:"Cows graze in the field every morning.", exZh:"牛每天早上都在田裡吃草。"},
+      {w:"challenge", ipa:"ˈtʃælɪndʒ", pos:"n.", zh:"挑戰", ex:"Learning a new language can be a real challenge.", exZh:"學習一門新語言可能是一項真正的挑戰。"},
+    ]},
+    { id:'u3', en:'Unit 3', zh:'Unit 3', theme:'space', words:[
+      {w:"glance", ipa:"glæns", pos:"n.", zh:"看一眼", ex:"I took a quick glance at my phone during class.", exZh:"上課時我快速看了一眼手機。"},
+      {w:"patient", ipa:"ˈpeʃənt", pos:"adj.", zh:"有耐心的", ex:"The teacher was very patient and explained the question again.", exZh:"老師非常有耐心，再次解釋了這個問題。"},
+      {w:"messy", ipa:"ˈmɛsɪ", pos:"adj.", zh:"髒亂的", ex:"My room is messy because I didn’t clean it this week.", exZh:"我的房間很亂，因為我這週沒有整理。"},
+      {w:"damage", ipa:"ˈdæmɪdʒ", pos:"v./n.", zh:"破壞", ex:"The typhoon damaged many houses in the village.", exZh:"颱風破壞了村子裡的許多房子。"},
+      {w:"loose", ipa:"lus", pos:"adj.", zh:"鬆的", ex:"My shoelaces are loose, so I need to tie them again.", exZh:"我的鞋帶鬆了，我要重新綁一次。"},
+      {w:"eager", ipa:"ˈigɚ", pos:"adj.", zh:"渴望的", ex:"The students were eager to start the game.", exZh:"學生們迫不及待想開始這個遊戲。"},
+      {w:"assist", ipa:"əˈsɪst", pos:"v.", zh:"幫助", ex:"Could you assist me with this homework?", exZh:"你可以幫我這份作業嗎？"},
+      {w:"divide", ipa:"dəˈvaɪd", pos:"v.", zh:"切分；區分", ex:"Let’s divide the cake so everyone gets a piece.", exZh:"我們把蛋糕分一下，讓每個人都有一塊。"},
+      {w:"tease", ipa:"tiz", pos:"v.", zh:"嘲笑", ex:"He teased his sister about her new haircut.", exZh:"他取笑妹妹的新髮型。"},
+      {w:"encourage", ipa:"ɪnˈkɝɪdʒ", pos:"v.", zh:"鼓勵", ex:"The coach encouraged the team to keep practicing.", exZh:"教練鼓勵球隊繼續練習。"},
+      {w:"spread", ipa:"sprɛd", pos:"v.", zh:"散布；散播", ex:"The news spread quickly on social media.", exZh:"這個消息在社群媒體上很快傳開。"},
+      {w:"replace", ipa:"rɪˈples", pos:"v.", zh:"取代", ex:"You should replace the old battery with a new one.", exZh:"你應該把舊電池換成新的。"},
+      {w:"stuff", ipa:"stʌf", pos:"n.", zh:"東西", ex:"I put all my stuff in the backpack before leaving.", exZh:"我在出門前把所有東西都放進背包裡。"},
+      {w:"blind", ipa:"blaɪnd", pos:"adj.", zh:"盲的", ex:"The man has been blind since birth.", exZh:"這名男子從出生起就看不見。"},
+      {w:"contest", ipa:"ˈkɑntɛst", pos:"n.", zh:"比賽", ex:"Our school will hold a singing contest next month.", exZh:"我們學校下個月要舉辦歌唱比賽。"},
+      {w:"deliver", ipa:"dɪˈlɪvɚ", pos:"v.", zh:"運送；遞送", ex:"The store can deliver the package to your house.", exZh:"這家店可以把包裹送到你家。"},
+      {w:"environment", ipa:"ɪnˈvaɪrənmənt", pos:"n.", zh:"環境", ex:"We should protect the environment by reducing waste.", exZh:"我們應該透過減少垃圾來保護環境。"},
+      {w:"suggest", ipa:"səˈdʒɛst", pos:"v.", zh:"建議", ex:"I suggest taking a rest if you feel tired.", exZh:"如果你覺得累，我建議你休息一下。"},
+      {w:"pleasant", ipa:"ˈplɛznt", pos:"adj.", zh:"令人愉快的", ex:"We had a pleasant walk in the park this morning.", exZh:"今天早上我們在公園散步得很愉快。"},
+      {w:"responsible", ipa:"rɪˈspɑnsəbḷ", pos:"adj.", zh:"負責任的", ex:"He is responsible for checking the equipment before the event starts.", exZh:"他負責在活動開始前檢查設備。"},
+      {w:"surface", ipa:"ˈsɝfɪs", pos:"n.", zh:"表面", ex:"The surface of the lake was very calm today.", exZh:"今天湖面非常平靜。"},
+      {w:"purpose", ipa:"ˈpɝpəs", pos:"n.", zh:"目的", ex:"What is the purpose of your trip to Taipei?", exZh:"你去台北旅行的目的什麼？"},
+      {w:"grab", ipa:"græb", pos:"v.", zh:"抓住", ex:"He grabbed his bag and ran out the door.", exZh:"他抓起他的包包就跑出門。"},
+      {w:"impress", ipa:"ɪmˈprɛs", pos:"v.", zh:"使~印象深刻", ex:"Her speech really impressed the judges.", exZh:"她的演講讓評審印象深刻。"},
+      {w:"willing", ipa:"ˈwɪlɪŋ", pos:"adj.", zh:"願意的", ex:"She is willing to try new food during the trip.", exZh:"她在旅途中願意嘗試新的食物。"},
+    ]},
+    { id:'u4', en:'Unit 4', zh:'Unit 4', theme:'autumn', words:[
+      {w:"election", ipa:"ɪˈlɛkʃən", pos:"v.", zh:"選舉", ex:"The school will have an election to choose a new class leader.", exZh:"學校將舉行選舉來選新的班長。"},
+      {w:"locate", ipa:"loˈket", pos:"v.", zh:"位於", ex:"I used my phone to locate the nearest restaurant.", exZh:"我用手機找到最近的餐廳。"},
+      {w:"rescue", ipa:"ˈrɛskju", pos:"v.", zh:"拯救", ex:"The firefighters worked together to rescue the dog from the river.", exZh:"消防員合作把那隻狗從河裡救起來。"},
+      {w:"instruction", ipa:"ɪnˈstrʌkʃən", pos:"n.", zh:"說明；指示", ex:"Please follow the instructions to finish the homework.", exZh:"請照著指示完成作業。"},
+      {w:"inspire", ipa:"ɪnˈspaɪr", pos:"v.", zh:"啟發", ex:"Her speech can inspire many students to try new things.", exZh:"她的演講能激勵許多學生嘗試新事物。"},
+      {w:"cover", ipa:"ˈkʌvɚ", pos:"v.", zh:"覆蓋", ex:"He used an umbrella to cover himself from the rain.", exZh:"他用雨傘遮住自己避免淋雨。"},
+      {w:"predator", ipa:"ˈprɛdətɚ", pos:"n.", zh:"狩獵者", ex:"A tiger is a predator that hunts other animals.", exZh:"老虎是會捕食其他動物的掠食者。"},
+      {w:"survive", ipa:"sɚˈvaɪv", pos:"v.", zh:"倖存", ex:"The plant can survive with just a little water.", exZh:"這株植物只需要一點水就能活下去。"},
+      {w:"capture", ipa:"ˈkæptʃɚ", pos:"v.", zh:"抓住", ex:"The police worked hard to capture the thief.", exZh:"警察努力抓住那名小偷。"},
+      {w:"remove", ipa:"rɪˈmuv", pos:"v.", zh:"移除", ex:"Please remove your shoes before entering the house.", exZh:"進屋前請脫鞋。"},
+      {w:"whisper", ipa:"ˈwɪspɚ", pos:"v.", zh:"輕聲低語", ex:"The girl whispered a secret to her friend.", exZh:"那個女孩對朋友輕聲說了一個秘密。"},
+      {w:"pleasant", ipa:"ˈplɛzənt", pos:"adj.", zh:"愉快的", ex:"We had a pleasant walk by the lake.", exZh:"我們在湖邊散步得很愉快。"},
+      {w:"force", ipa:"fɔrs", pos:"v.", zh:"強迫", ex:"The heavy rain forced us to stay inside.", exZh:"大雨讓我們只能待在室內。"},
+      {w:"freeze", ipa:"friz", pos:"v.", zh:"結凍", ex:"The water will freeze if the temperature drops.", exZh:"如果溫度下降，水會結冰。"},
+      {w:"educate", ipa:"ˈɛdʒəˌkeɪt", pos:"v.", zh:"教育", ex:"Teachers work hard to educate young children.", exZh:"老師努力教育年幼的孩子。"},
+      {w:"fancy", ipa:"ˈfænsi", pos:"adj.", zh:"華麗的", ex:"She wore a fancy dress to the party.", exZh:"她穿著華麗的洋裝去參加派對。"},
+      {w:"rob", ipa:"rɑb", pos:"v.", zh:"搶劫", ex:"The man tried to rob the bank but failed.", exZh:"那名男子試圖搶劫銀行但失敗了。"},
+      {w:"signal", ipa:"ˈsɪgnəl", pos:"n.", zh:"暗號；訊號", ex:"The red light is a signal for cars to stop.", exZh:"紅燈是讓車子停下來的信號。"},
+      {w:"blossom", ipa:"ˈblɑsəm", pos:"v.", zh:"開花", ex:"The flowers blossom in spring every year.", exZh:"這些花每年春天都會開。"},
+      {w:"cautious", ipa:"ˈkɔʃəs", pos:"adj.", zh:"謹慎的；小心的", ex:"Be cautious when you cross the busy road.", exZh:"過繁忙馬路時要小心。"},
+      {w:"notice", ipa:"ˈnoʊtɪs", pos:"v.", zh:"注意", ex:"I didn’t notice you standing there.", exZh:"我沒有注意到你站在那裡。"},
+      {w:"communicate", ipa:"kəˈmunəˌket", pos:"v.", zh:"溝通", ex:"We use the internet to communicate with friends.", exZh:"我們用網路與朋友聯絡。"},
+      {w:"warn", ipa:"wɔrn", pos:"v.", zh:"警告", ex:"The sign warns people not to swim in the river.", exZh:"這個告示牌警告人們不要在河裡游泳。"},
+      {w:"admit", ipa:"ədˈmɪt", pos:"v.", zh:"承認", ex:"He admitted he made a mistake.", exZh:"他承認自己犯了錯。"},
+      {w:"feature", ipa:"ˈfitʃɚ", pos:"n.", zh:"特色", ex:"This app has many useful features for students.", exZh:"這個應用程式有許多對學生很有用的特色。"},
+    ]},
+    { id:'u5', en:'Unit 5', zh:'Unit 5', theme:'forest', words:[
+      {w:"blizzard", ipa:"ˈblɪzɚd", pos:"n.", zh:"暴風雪", ex:"The blizzard was so strong that we could not see the road.", exZh:"暴風雪太強了，我們看不清楚路。"},
+      {w:"field", ipa:"fild", pos:"n.", zh:"領域", ex:"Emma hopes to work in the field of science in the future.", exZh:"Emma希望未來能在科學領域工作。"},
+      {w:"recall", ipa:"rɪˈkɔl", pos:"v.", zh:"回憶", ex:"I can still recall the day we first met.", exZh:"我仍然記得我們第一次見面的那一天。"},
+      {w:"surround", ipa:"səˈraʊnd", pos:"v.", zh:"圍繞", ex:"Tall trees surround the small house.", exZh:"高大的樹木圍繞著那間小屋。"},
+      {w:"disappointed", ipa:"ˌdɪsəˈpɔɪntɪd", pos:"adj.", zh:"感到失望的", ex:"She felt disappointed when the trip was canceled at the last minute.", exZh:"當旅行在最後一刻被取消時，她感到很失望。"},
+      {w:"cause", ipa:"kɔz", pos:"v.", zh:"造成；導致", ex:"Too much rain can cause flooding in the city.", exZh:"過多的雨量會導致城市淹水。"},
+      {w:"competition", ipa:"ˌkɑmpəˈtɪʃən", pos:"n.", zh:"競爭；比賽", ex:"Many students joined the singing competition at school.", exZh:"許多學生參加了學校的歌唱比賽。"},
+      {w:"audience", ipa:"ˈɔdiəns", pos:"n.", zh:"觀眾", ex:"The audience clapped loudly after the show.", exZh:"表演結束後觀眾熱烈鼓掌。"},
+      {w:"tense", ipa:"tɛns", pos:"adj.", zh:"緊張的", ex:"I felt tense before my English test.", exZh:"英文考試前我感到很緊張。"},
+      {w:"fierce", ipa:"fɪrs", pos:"adj.", zh:"猛烈的", ex:"A fierce storm hit the coast last night.", exZh:"昨晚一場猛烈的風暴襲擊了海岸。"},
+      {w:"rough", ipa:"rʌf", pos:"adj.", zh:"粗糙的", ex:"The rock felt rough when I touched it.", exZh:"這塊石頭摸起來很粗糙。"},
+      {w:"smooth", ipa:"smuð", pos:"adj.", zh:"平順的", ex:"The car ride was smooth because the road was new.", exZh:"路很新，所以車程非常平順。"},
+      {w:"observe", ipa:"əbˈzɝv", pos:"v.", zh:"觀察；遵守", ex:"Scientists observe animals to learn about their behavior.", exZh:"科學家觀察動物以了解牠們的行為。"},
+      {w:"ancient", ipa:"ˈenʃənt", pos:"adj.", zh:"古代的", ex:"We learned about ancient cities in history class today.", exZh:"我們今天在歷史課上學到古代的城市。"},
+      {w:"vision", ipa:"ˈvɪʒən", pos:"n.", zh:"視力", ex:"Kevin’s vision got better after he got new glasses.", exZh:"Kevin戴上新眼鏡後視力變好了。"},
+      {w:"track", ipa:"træk", pos:"v./n.", zh:"追蹤；；軌道", ex:"The police can track the thief by using cameras.", exZh:"警方可以用攝影機追蹤小偷。"},
+      {w:"panic", ipa:"ˈpænɪk", pos:"v.", zh:"驚慌", ex:"Don’t panic; everything will be fine.", exZh:"別驚慌；一切都會好起來的。"},
+      {w:"squeeze", ipa:"skwiz", pos:"v.", zh:"擠；擰", ex:"She squeezed the orange to make fresh juice.", exZh:"她擠了柳橙來做新鮮果汁。"},
+      {w:"continue", ipa:"kənˈtɪnju", pos:"v.", zh:"繼續", ex:"After a short break, we continued our homework.", exZh:"休息一下後，我們繼續做作業。"},
+      {w:"slippery", ipa:"ˈslɪpəri", pos:"adj.", zh:"滑滑的", ex:"Be careful! The floor is wet and very slippery.", exZh:"小心！地板濕濕的，很滑。"},
+      {w:"skilled", ipa:"skɪld", pos:"adj.", zh:"有技巧的", ex:"She is a skilled dancer who practices every day.", exZh:"她是位有技巧的舞者，每天都練習。"},
+      {w:"vivid", ipa:"ˈvɪvɪd", pos:"adj.", zh:"栩栩如生的", ex:"The writer gave a vivid description of the city.", exZh:"作者對這座城市的描述非常生動。"},
+      {w:"extend", ipa:"ɪkˈstɛnd", pos:"v.", zh:"延伸", ex:"The river extends all the way to the sea.", exZh:"這條河一路延伸到大海。"},
+      {w:"grateful", ipa:"ˈgretfəl", pos:"adj.", zh:"感激的", ex:"She felt grateful for the help she received during the difficult time.", exZh:"她對在困難時期所得到的幫助心懷感激。"},
+      {w:"attach", ipa:"əˈtætʃ", pos:"v.", zh:"附上", ex:"Please attach the file to your e-mail.", exZh:"請把檔案附在你的電子郵件裡。"},
+    ]},
+    { id:'u6', en:'Unit 6', zh:'Unit 6', theme:'ocean', words:[
+      {w:"alert", ipa:"əˈlɝt", pos:"adj.", zh:"警覺的", ex:"Drivers must stay alert when driving at night.", exZh:"駕駛人在夜間開車時必須保持警覺。"},
+      {w:"confuse", ipa:"kənˈfjuz", pos:"v.", zh:"使~困惑", ex:"The new rules confused many students.", exZh:"新規則讓許多學生感到困惑。"},
+      {w:"separate", ipa:"ˈsɛpəˌret", pos:"v.", zh:"分開", ex:"We separated the trash into different bins for recycling.", exZh:"我們把垃圾分類到不同的桶子做回收。"},
+      {w:"comfort", ipa:"ˈkʌmfɚt", pos:"v.", zh:"安慰", ex:"She comforted her friend who was crying.", exZh:"她安慰正在哭泣的朋友。"},
+      {w:"interrupt", ipa:"ˌɪntəˈrʌpt", pos:"v.", zh:"打斷", ex:"Please don’t interrupt me while I’m speaking.", exZh:"我說話時請不要打斷我。"},
+      {w:"parade", ipa:"pəˈred", pos:"n.", zh:"遊行", ex:"We watched the holiday parade pass through the town center.", exZh:"我們看著節慶遊行經過城鎮中心。"},
+      {w:"shade", ipa:"ʃed", pos:"n.", zh:"陰影", ex:"Let’s sit in the shade so we don’t get too hot.", exZh:"我們坐到陰影下，不要讓自己太熱。"},
+      {w:"gather", ipa:"ˈgæðɚ", pos:"v.", zh:"聚集", ex:"Farmers gather crops in the fall.", exZh:"農夫在秋天收成作物。"},
+      {w:"explore", ipa:"ɪkˈsplor", pos:"v.", zh:"探索", ex:"The students explored the museum to learn more about history.", exZh:"學生們探索博物館以更多了解歷史。"},
+      {w:"lawn", ipa:"lɔn", pos:"n.", zh:"草坪", ex:"The kids are playing on the front lawn.", exZh:"孩子們正在前院的草坪上玩。"},
+      {w:"rush", ipa:"rʌʃ", pos:"v.", zh:"衝到", ex:"She rushed to finish her homework before dinner.", exZh:"她趕在晚餐前匆忙完成作業。"},
+      {w:"route", ipa:"raʊt", pos:"n.", zh:"路線", ex:"This is the fastest route to the library.", exZh:"這是到圖書館最快的路線。"},
+      {w:"sense", ipa:"sɛns", pos:"n.", zh:"感官", ex:"Animals use their senses to find food and avoid danger.", exZh:"動物用牠們的感官來找食物並避開危險。"},
+      {w:"insect", ipa:"ˈɪnˌsɛkt", pos:"n.", zh:"昆蟲", ex:"The bird eats insects to feed its babies.", exZh:"那隻鳥吃昆蟲來餵牠的小寶寶。"},
+      {w:"yell", ipa:"jɛl", pos:"v.", zh:"大叫", ex:"He yelled loudly to warn others about the danger ahead.", exZh:"他大聲喊叫，提醒其他人前方有危險。"},
+      {w:"frustrate", ipa:"ˈfrʌˌstret", pos:"v.", zh:"使~挫折", ex:"The slow progress really frustrated him.", exZh:"進度太慢真的讓他感到挫折。"},
+      {w:"hill", ipa:"hɪl", pos:"n.", zh:"山丘", ex:"They climbed the hill to enjoy the view from the top.", exZh:"他們爬上山丘欣賞山頂的景色。"},
+      {w:"defeat", ipa:"dɪˈfit", pos:"v.", zh:"擊敗", ex:"The team worked hard together and finally defeated their rivals.", exZh:"這支隊伍努力合作，最後擊敗了對手。"},
+      {w:"fair", ipa:"fɛr", pos:"n.", zh:"展覽", ex:"We went to the science fair and saw many amazing student projects.", exZh:"我們去參加科學展，看到許多很棒的學生作品。"},
+      {w:"feed", ipa:"fid", pos:"v.", zh:"餵食", ex:"He feeds the dog every morning before going to school.", exZh:"他每天早上上學前會餵狗。"},
+      {w:"trick", ipa:"trɪk", pos:"v.", zh:"捉弄", ex:"The kids tried to trick their brother with a fake spider.", exZh:"孩子們試著用假蜘蛛捉弄他們的哥哥。"},
+      {w:"immediately", ipa:"ɪˈmidɪətli", pos:"adv.", zh:"立刻", ex:"She answered the phone immediately after it rang.", exZh:"電話一響，她立刻就接了。"},
+      {w:"peek", ipa:"pik", pos:"v.", zh:"偷看", ex:"The little girl peeked through the door to see who was outside.", exZh:"小女孩從門縫偷看外面是誰。"},
+      {w:"wonder", ipa:"ˈwʌndɚ", pos:"v.", zh:"想知道", ex:"She wondered whether the plan would work as expected.", exZh:"她想知道這個計畫是否會如預期進行。"},
+    ]},
+    { id:'u7', en:'Unit 7', zh:'Unit 7', theme:'space', words:[
+      {w:"depend", ipa:"dɪˈpɛnd", pos:"v.", zh:"依賴", ex:"I depend on my parents for advice when I face difficult choices.", exZh:"當我面臨困難抉擇時，我會依賴父母給我建議。"},
+      {w:"assist", ipa:"əˈsɪst", pos:"v.", zh:"幫助", ex:"The teacher asked a teaching assistant to assist the students after class.", exZh:"老師請助教在下課後協助學生。"},
+      {w:"struggle", ipa:"ˈstrʌgəl", pos:"v.", zh:"掙扎；奮鬥", ex:"Many students struggle with English listening at the beginning.", exZh:"許多學生一開始在英文聽力上感到吃力。"},
+      {w:"hardly", ipa:"ˈhɑrdlɪ", pos:"adv.", zh:"幾乎不", ex:"He hardly noticed the sign because it was covered by tall trees.", exZh:"他幾乎沒有注意到那個標誌，因為被高大的樹遮住了。"},
+      {w:"represent", ipa:"ˌrɛprɪˈzɛnt", pos:"v.", zh:"代表", ex:"This picture represents freedom and hope to many people.", exZh:"這張圖片對許多人來說象徵自由與希望。"},
+      {w:"experience", ipa:"ɪkˈspɪrɪəns", pos:"n.", zh:"經驗", ex:"Working part-time gave him valuable experience for the future.", exZh:"打工為他的未來帶來寶貴的經驗。"},
+      {w:"item", ipa:"ˈaɪtəm", pos:"n.", zh:"物品；項目", ex:"Each item on the list must be checked before the trip.", exZh:"出發前，清單上的每一項物品都必須檢查。"},
+      {w:"treasure", ipa:"ˈtrɛʒɚ", pos:"n.", zh:"寶藏", ex:"The old photos are a treasure to the family.", exZh:"這些老照片對這個家庭來說是珍貴的寶物。"},
+      {w:"invisible", ipa:"ɪnˈvɪzəbḷ", pos:"adj.", zh:"隱形的", ex:"The thin wire was almost invisible in the dark room.", exZh:"那條細線在黑暗的房間裡幾乎看不見。"},
+      {w:"desert", ipa:"ˈdɛzɚt", pos:"v./n.", zh:"拋棄；沙漠", ex:"Very few people can live in the desert for a long time.", exZh:"很少有人能長時間生活在沙漠中。"},
+      {w:"daring", ipa:"ˈdɛrɪŋ", pos:"adj.", zh:"大膽的", ex:"She made a daring decision to change her career.", exZh:"她做出一個大膽的決定，改變自己的職涯。"},
+      {w:"dread", ipa:"drɛd", pos:"v./n.", zh:"害怕", ex:"He felt dread before speaking in front of the whole class.", exZh:"在全班面前發言前，他感到恐懼。"},
+      {w:"release", ipa:"rɪˈlis", pos:"v.", zh:"釋放", ex:"The company will release the new product next month.", exZh:"這家公司將在下個月推出新產品。"},
+      {w:"area", ipa:"ˈɛrɪə", pos:"n.", zh:"區域", ex:"This area is popular with families because it is safe and convenient.", exZh:"這個地區因為安全又方便，所以很受家庭歡迎。"},
+      {w:"march", ipa:"mɑrtʃ", pos:"v.", zh:"大步前進", ex:"The soldiers marched through the street during the parade.", exZh:"遊行時，士兵們行進穿過街道。"},
+      {w:"soak", ipa:"sok", pos:"v.", zh:"浸泡", ex:"He soaked the shirt in water to clean the stain.", exZh:"他把襯衫泡在水中來清除污漬。"},
+      {w:"figure out", ipa:"ˈfɪgjɚ aʊt", pos:"v.", zh:"理解；想出來", ex:"She finally figured out how to solve the math problem.", exZh:"她終於想出如何解這道數學題。"},
+      {w:"operation", ipa:"ˌɑpəˈreʃən", pos:"n.", zh:"手術；操作", ex:"The doctor said the operation was successful.", exZh:"醫生說這次手術很成功。"},
+      {w:"demonstration", ipa:"ˌdɛmənˈstreʃən", pos:"n.", zh:"展示；示範；示威遊行", ex:"The teacher gave a short demonstration before the experiment.", exZh:"老師在實驗前做了簡短的示範。"},
+      {w:"wise", ipa:"waɪz", pos:"adj.", zh:"有智慧的；明智的", ex:"It is wise to think carefully before making an important decision.", exZh:"在做出重要決定前仔細思考是明智的。"},
+      {w:"delighted", ipa:"dɪˈlaɪtɪd", pos:"adj.", zh:"感到高興的", ex:"She was delighted to hear that she passed the test.", exZh:"聽到她通過考試，她感到非常高興。"},
+      {w:"persuade", ipa:"pɚˈswed", pos:"v.", zh:"說服", ex:"He tried to persuade his parents to let him study abroad.", exZh:"他試著說服父母讓他出國讀書。"},
+      {w:"admire", ipa:"ədˈmaɪr", pos:"v.", zh:"佩服", ex:"I admire the teacher for her patience with students.", exZh:"我很佩服那位老師對學生的耐心。"},
+      {w:"selfish", ipa:"ˈsɛlfɪʃ", pos:"adj.", zh:"自私的", ex:"It is selfish to think only about your own needs.", exZh:"只想到自己的需求是很自私的。"},
+      {w:"predict", ipa:"prɪˈdɪkt", pos:"v.", zh:"預測", ex:"Scientists predict that the storm will arrive tonight.", exZh:"科學家預測暴風雨今晚會來。"},
+    ]},
+    { id:'u8', en:'Unit 8', zh:'Unit 8', theme:'autumn', words:[
+      {w:"creature", ipa:"ˈkritʃɚ", pos:"n.", zh:"生物", ex:"A strange creature was seen moving quietly near the lake at night.", exZh:"夜晚時，有人看到一種奇怪的生物在湖邊安靜地移動。"},
+      {w:"enormous", ipa:"ɪˈnɔrməs", pos:"adj.", zh:"巨大的", ex:"The enormous statue attracted many tourists from different countries.", exZh:"那座巨大的雕像吸引了來自不同國家的遊客。"},
+      {w:"appearance", ipa:"əˈpɪrəns", pos:"n.", zh:"外表；出現", ex:"His appearance changed after he started wearing glasses and formal clothes.", exZh:"他開始戴眼鏡並穿正式服裝後，外表產生了變化。"},
+      {w:"peaceful", ipa:"ˈpisfəl", pos:"adj.", zh:"平靜的", ex:"The park is peaceful in the early morning before people arrive.", exZh:"清晨人們尚未到來時，公園十分寧靜。"},
+      {w:"swift", ipa:"swɪft", pos:"adj.", zh:"快速的", ex:"The team made a swift decision when the weather suddenly changed.", exZh:"當天氣突然改變時，團隊迅速做出決定。"},
+      {w:"please", ipa:"pliz", pos:"v.", zh:"使滿意", ex:"The manager tried to please customers by improving the service quality.", exZh:"經理透過提升服務品質來取悅顧客。"},
+      {w:"sympathy", ipa:"ˈsɪmpəθɪ", pos:"n.", zh:"同情", ex:"She showed sympathy toward her friend who failed the important exam.", exZh:"她對那位重要考試失敗的朋友表示同情。"},
+      {w:"attention", ipa:"əˈtɛnʃən", pos:"n.", zh:"注意", ex:"The speaker asked the audience to pay attention to the safety rules.", exZh:"講者要求聽眾注意安全規定。"},
+      {w:"entertainment", ipa:"ˌɛntɚˈtenmənt", pos:"n.", zh:"娛樂", ex:"Watching movies online has become a common form of entertainment.", exZh:"線上看電影已成為一種常見的娛樂方式。"},
+      {w:"cave", ipa:"kav", pos:"n.", zh:"洞穴", ex:"The guide warned visitors not to enter the cave without proper equipment.", exZh:"導遊警告遊客不要在沒有適當裝備的情況下進入洞穴。"},
+      {w:"carve", ipa:"kɑrv", pos:"v.", zh:"雕刻", ex:"He carved his name on the tree as a reminder of the trip.", exZh:"他把自己的名字刻在樹上，作為這趟旅行的紀念。"},
+      {w:"elegant", ipa:"ˈɛləgənt", pos:"adj.", zh:"優雅的", ex:"The hotel lobby was decorated in an elegant and modern style.", exZh:"飯店大廳以優雅且現代的風格裝潢。"},
+      {w:"nest", ipa:"nɛst", pos:"n.", zh:"巢穴", ex:"The bird returned to its nest after searching for food.", exZh:"鳥在覓食後回到了牠的巢。"},
+      {w:"technology", ipa:"tɛkˈnɑlədʒɪ", pos:"n.", zh:"科技", ex:"New technology has changed how people communicate and learn.", exZh:"新科技改變了人們溝通與學習的方式。"},
+      {w:"sneaky", ipa:"ˈsnikɪ", pos:"adj.", zh:"鬼鬼祟祟的", ex:"He took a sneaky look at his phone during the meeting.", exZh:"他在會議中偷偷看了一眼手機。"},
+      {w:"transfer", ipa:"trænsˈfɝ", pos:"v.", zh:"轉移", ex:"Passengers must transfer to another train at the next station.", exZh:"乘客必須在下一站轉乘另一班列車。"},
+      {w:"wrap", ipa:"ræp", pos:"v.", zh:"包裹", ex:"She wrapped the fragile item in thick paper before shipping it.", exZh:"她在寄送前用厚紙把易碎物品包好。"},
+      {w:"uniform", ipa:"ˈjunəˌfɔrm", pos:"n.", zh:"制服", ex:"Students are required to wear a uniform during school hours.", exZh:"學生在上課時間必須穿著制服。"},
+      {w:"region", ipa:"ˈridʒən", pos:"n.", zh:"地區", ex:"This region is known for its warm climate and local food.", exZh:"這個地區以溫暖的氣候和在地美食聞名。"},
+      {w:"mention", ipa:"ˈmɛnʃən", pos:"v.", zh:"提到", ex:"He mentioned the problem briefly at the end of the discussion.", exZh:"他在討論結束時簡短提到這個問題。"},
+      {w:"raise", ipa:"rez", pos:"v.", zh:"舉起；提高；養育", ex:"The company plans to raise salaries to keep experienced workers.", exZh:"公司計畫調高薪資以留住有經驗的員工。"},
+      {w:"mark", ipa:"mɑrk", pos:"v.", zh:"標記", ex:"Please mark the correct answer clearly on the answer sheet.", exZh:"請在答案卡上清楚標記正確答案。"},
+      {w:"ignore", ipa:"ɪgˈnor", pos:"v.", zh:"忽略", ex:"He chose to ignore the message because it was not urgent.", exZh:"他選擇忽視那則訊息，因為並不緊急。"},
+      {w:"upset", ipa:"ʌpˈsɛt", pos:"adj.", zh:"難過的", ex:"She felt upset after hearing the unexpected news.", exZh:"她聽到那個突如其來的消息後感到難過。"},
+      {w:"claw", ipa:"klɔ", pos:"n.", zh:"爪子", ex:"The kitten used its claw to pull the string closer.", exZh:"小貓用牠的爪子把繩子拉近。"},
+    ]}
+]};
+const PART = 10;                                  // 每關最多幾隻敵人（主題會平均切成好幾關）
 const SPEED = 36, EVERY = 6.5;                    // 一般關卡：敵人速度、幾秒出一隻
 const QUIZ = { n:20, speed:42, every:5.5 };       // 小考模擬：從整週隨機抽 n 個字
 const MAX_HP = 5;          // 城牆耐久
 const COMBO = 3;           // 連續答對幾題觸發投石
 const SAVE_KEY = 'lexile_keep_w_v1';
 
+const GROUPS = [...WEEKS, HF];                    // 每週講義＋高頻單字區
 const STAGES = [];
-WEEKS.forEach(wk => {
+GROUPS.forEach(wk => {
   wk.units.forEach(u => {
     u.words.forEach(x => { x.area = u.theme; });
-    for(let k=0; k*PART < u.words.length; k++){
-      const words = u.words.slice(k*PART, (k+1)*PART), from = k*PART+1, to = k*PART+words.length;
+    const n = Math.ceil(u.words.length / PART), size = Math.ceil(u.words.length / n);   // 25 字 → 9／8／8
+    for(let k=0, a=0; k<n; k++){
+      const len = Math.min(size - (k >= n - (n*size - u.words.length) ? 1 : 0), u.words.length - a);
+      const words = u.words.slice(a, a+len), from = a+1, to = a+len; a += len;
       STAGES.push({ id:`${wk.id}-${u.id}-${k+1}`, week:wk, unit:u, words, from, to, theme:u.theme, speed:SPEED, every:EVERY, title:`${u.zh}　${from}–${to}` });
     }
   });
-  STAGES.push({ id:`${wk.id}-quiz`, week:wk, quiz:true, words:wk.units.flatMap(u => u.words), theme:'autumn', speed:QUIZ.speed, every:QUIZ.every, title:`${wk.name}　小考模擬` });
+  const all = wk.units.flatMap(u => u.words).filter((x,i,arr) => arr.findIndex(y => y.w === x.w) === i);
+  STAGES.push({ id:`${wk.id}-quiz`, week:wk, quiz:true, words:all, theme:'autumn', speed:QUIZ.speed, every:QUIZ.every,
+                title: wk === HF ? '高頻單字　綜合挑戰' : `${wk.name}　小考模擬` });
 });
 
 /* ---------- 存檔（只存在這台裝置的瀏覽器） ---------- */
 function load(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }catch(e){ return {}; } }
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
-const S = Object.assign({ stars:{}, wrong:{}, week:'w1' }, load());
+const S = Object.assign({ stars:{}, wrong:{}, week:'w1', sec:'weekly' }, load());
 
 /* ---------- 小工具 ---------- */
 const $app = document.getElementById('app');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shuffle = a => { a = a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
 const pick = (a,n) => shuffle(a).slice(0,n);
-const allWords = WEEKS.flatMap(wk => wk.units.flatMap(u => u.words));
+const allWords = GROUPS.flatMap(wk => wk.units.flatMap(u => u.words));
 const findWord = w => allWords.find(x => x.w === w);
 
 function ask(msg, onYes){
@@ -599,7 +836,13 @@ function makeQuestion(x, pool, avoid){
   let types = TYPES.filter(t => t !== avoid && (t !== 'listen' || canSpeak) && (t !== 'fill' || canFill(x)));
   const type = types[Math.floor(Math.random()*types.length)];
   if(pool.length < 4) pool = allWords;
-  const opts = shuffle([x, ...pick(pool.filter(y => y.w !== x.w), 3)]);
+  const seenW = new Set([x.w]), seenZ = new Set([x.zh]), others = [];
+  for(const y of shuffle(pool.length >= 4 ? pool : allWords)){
+    if(others.length === 3) break;
+    if(seenW.has(y.w) || seenZ.has(y.zh)) continue;
+    seenW.add(y.w); seenZ.add(y.zh); others.push(y);
+  }
+  const opts = shuffle([x, ...others]);
   return { word:x, type, opts, answer:x.w, labels: opts.map(o => type === 'en2zh' ? o.zh : o.w) };
 }
 
@@ -865,14 +1108,16 @@ function finish(won){
 /* ---------- 畫面：地圖 ---------- */
 function showMap(){
   stopGame();
-  const wk = WEEKS.find(w => w.id === S.week) || WEEKS[0];
+  const sec = S.sec === 'hf' ? 'hf' : 'weekly';
+  const wk = sec === 'hf' ? HF : (WEEKS.find(w => w.id === S.week) || WEEKS[0]);
   const wrongN = Object.keys(S.wrong).length;
   const idx = st => STAGES.indexOf(st);
-  $app.innerHTML = `
-    <header class="brand">
-      <div><span class="en">Lexile Reading Rex</span><h1>藍思閱讀單字王</h1></div>
-      <p>藍思閱讀單字　答對單字守住城堡，成為單字王</p>
-    </header>
+  const parts = u => `<div class="parts">${STAGES.filter(st => st.unit === u).map(st => `<div class="part">
+      <span><b>第 ${st.from}–${st.to} 字</b>　${starsHtml(S.stars[st.id] || 0)}</span>
+      <button class="btn sm" data-play="${idx(st)}">${IC.sword}守城</button>
+    </div>`).join('')}</div>`;
+  const quiz = STAGES.find(st => st.week === wk && st.quiz);
+  const weekly = `
     <nav class="weeks" aria-label="選擇週次">${WEEKS.map(w => `<button class="wk ${w===wk?'on':''}" data-week="${w.id}">${esc(w.name)}</button>`).join('')}</nav>
     <div class="stages">
       ${wk.units.map((u,ui) => `<article class="stage">
@@ -880,22 +1125,55 @@ function showMap(){
         <div class="body">
           <div class="head"><span class="no">UNIT ${ui+1}</span><h2>${esc(u.zh)}</h2></div>
           <div class="meta"><span class="latin" style="font-size:16px">${esc(u.en)}</span><span>${u.words.length} 個單字</span></div>
-          <div class="parts">${STAGES.filter(st => st.unit === u).map(st => `<div class="part">
-              <span><b>第 ${st.from}–${st.to} 字</b>　${starsHtml(S.stars[st.id] || 0)}</span>
-              <button class="btn sm" data-play="${idx(st)}">${IC.sword}守城</button>
-            </div>`).join('')}</div>
+          ${parts(u)}
           <button class="btn alt" data-learn="${wk.id}:${u.id}">${IC.book}預習這 ${u.words.length} 個字</button>
         </div>
       </article>`).join('')}
-      ${STAGES.filter(st => st.week === wk && st.quiz).map(st => `<article class="stage">
+      <article class="stage">
         <canvas data-thumb="autumn" aria-hidden="true"></canvas>
         <div class="body">
           <div class="head"><span class="no">QUIZ</span><h2>小考模擬</h2></div>
-          <div class="meta"><span>從本週 ${st.words.length} 個字隨機抽 ${QUIZ.n} 隻敵人，走得比較快。小考前來守一次。</span>${starsHtml(S.stars[st.id] || 0)}</div>
-          <button class="btn gold" data-play="${idx(st)}">${IC.sword}開始小考模擬</button>
+          <div class="meta"><span>從本週 ${quiz.words.length} 個字隨機抽 ${QUIZ.n} 隻敵人，走得比較快。小考前來守一次。</span>${starsHtml(S.stars[quiz.id] || 0)}</div>
+          <button class="btn gold" data-play="${idx(quiz)}">${IC.sword}開始小考模擬</button>
         </div>
-      </article>`).join('')}
-    </div>
+      </article>
+    </div>`;
+  const hf = `
+    <div class="stages">
+      <article class="stage">
+        <canvas data-thumb="ocean" aria-hidden="true"></canvas>
+        <div class="body">
+          <div class="head"><span class="no">LEXILE</span><h2>高頻單字</h2><span class="pill">${esc(HF.lexile)}</span></div>
+          <div class="meta"><span>Unit 1～${HF.units.length}，共 ${quiz.words.length} 個不重複的字。每個 Unit 分成三關，可以自由選。</span></div>
+        </div>
+      </article>
+      <div class="ulist">
+        ${HF.units.map(u => `<article class="ucard">
+          <div class="uhead"><h3 class="latin">${esc(u.en)}</h3><span>${u.words.length} 個單字</span></div>
+          <p class="peek latin">${u.words.slice(0,5).map(x => esc(x.w)).join(' · ')} …</p>
+          ${parts(u)}
+          <button class="btn alt sm full" data-learn="${HF.id}:${u.id}">${IC.book}預習這 ${u.words.length} 個字</button>
+        </article>`).join('')}
+      </div>
+      <article class="stage">
+        <canvas data-thumb="autumn" aria-hidden="true"></canvas>
+        <div class="body">
+          <div class="head"><span class="no">CHALLENGE</span><h2>綜合挑戰</h2></div>
+          <div class="meta"><span>從 ${quiz.words.length} 個高頻單字隨機抽 ${QUIZ.n} 隻敵人，走得比較快。</span>${starsHtml(S.stars[quiz.id] || 0)}</div>
+          <button class="btn gold" data-play="${idx(quiz)}">${IC.sword}開始綜合挑戰</button>
+        </div>
+      </article>
+    </div>`;
+  $app.innerHTML = `
+    <header class="brand">
+      <div><span class="en">Lexile Reading Rex</span><h1>藍思閱讀單字王</h1></div>
+      <p>藍思閱讀單字　答對單字守住城堡，成為單字王</p>
+    </header>
+    <nav class="secs" aria-label="選擇單字區">
+      <button class="sec ${sec==='weekly'?'on':''}" data-sec="weekly"><b>每週講義</b><span>第 1～4 週</span></button>
+      <button class="sec ${sec==='hf'?'on':''}" data-sec="hf"><b>高頻單字</b><span>${esc(HF.lexile)}</span></button>
+    </nav>
+    ${sec === 'hf' ? hf : weekly}
     <div class="row" style="margin-top:16px">
       <button class="btn quiet" id="toWrong">錯題本（${wrongN}）</button>
       <button class="btn quiet" id="toHelp">玩法說明</button>
@@ -903,6 +1181,7 @@ function showMap(){
     </div>
     <p class="foot">單字與例句取自藍思閱讀單字講義。進度只存在這台裝置的瀏覽器，不會上傳。</p>`;
   document.querySelectorAll('[data-thumb]').forEach(cv => paintStill(cv, cv.dataset.thumb));
+  document.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { S.sec = b.dataset.sec; save(); showMap(); });
   document.querySelectorAll('[data-week]').forEach(b => b.onclick = () => { S.week = b.dataset.week; save(); showMap(); });
   document.querySelectorAll('[data-learn]').forEach(b => b.onclick = () => showLearn(b.dataset.learn));
   document.querySelectorAll('[data-play]').forEach(b => b.onclick = () => playStage(+b.dataset.play));
@@ -935,12 +1214,12 @@ function wordRow(x, extra=''){
 /* ---------- 畫面：預習 ---------- */
 function showLearn(key){
   const [wid, uid] = key.split(':');
-  const u = WEEKS.find(w => w.id === wid).units.find(x => x.id === uid);
+  const u = GROUPS.find(w => w.id === wid).units.find(x => x.id === uid);
   const first = STAGES.findIndex(st => st.unit === u);
   $app.innerHTML = `${topbar(u.zh)}
-    <p class="lead">這個主題有 ${u.words.length} 個字，守城時每隻敵人帶一個。先把字記熟再上城牆。</p>
+    <p class="lead">這${u.zh.startsWith('Unit') ? '個 Unit ' : '個主題'}有 ${u.words.length} 個字，守城時每隻敵人帶一個。先把字記熟再上城牆。</p>
     <div class="sheet">${u.words.map(x => wordRow(x)).join('')}</div>
-    <button class="btn full" id="go">${IC.sword}從第 1–${Math.min(PART,u.words.length)} 字開始守城</button>`;
+    <button class="btn full" id="go">${IC.sword}從第 1–${STAGES[first].to} 字開始守城</button>`;
   document.getElementById('go').onclick = () => playStage(first);
   bindSay(); scrollTo(0,0);
 }
@@ -1025,7 +1304,7 @@ function showHelp(){
       <p>答對，城牆上的弓箭手會射中牠；答錯，箭會射偏，敵人還會往前衝一步。答錯後會顯示正確答案，敵人也會暫時放慢腳步，讓你看清楚。</p>
       <p>連續答對 ${COMBO} 題，投石車會發射石塊，把所有敵人往後擊退並暈眩一下。</p>
       <p>敵人走到城門會敲城牆一下。城牆有 ${MAX_HP} 點耐久，全部用完就失敗。守住時城牆完好拿 3 顆星，剩 3～4 點拿 2 顆星，剩 1～2 點拿 1 顆星。</p>
-      <p>每個主題的 20 個字分成兩關（第 1–10 字、第 11–20 字），可以自由選。每週最後的<b>小考模擬</b>會從整週的字隨機抽 ${QUIZ.n} 個，敵人走得比較快，適合小考前練習。</p>
+      <p>首頁上方可以切換兩個單字區。<b>每週講義</b>：每個主題的 20 個字分成兩關，每週最後的小考模擬會從整週的字隨機抽 ${QUIZ.n} 個，適合小考前練習。<b>高頻單字</b>：Unit 1～${HF.units.length}，每個 Unit 分成三關，最後的綜合挑戰會從全部高頻單字隨機抽 ${QUIZ.n} 個。</p>
       <p>題型有四種：看英文選中文、看中文選英文、聽發音選單字、例句填空。用電腦玩可以按鍵盤 1～4 作答。</p>
     </div>
     <button class="btn quiet full" id="reset">清除這台裝置的進度</button>`;
