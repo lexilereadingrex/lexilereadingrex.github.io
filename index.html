@@ -191,7 +191,7 @@ button:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 </head>
 <body>
 <div class="wrap" id="app"></div>
-<div class="modal" id="modal" hidden><div class="box"><p id="modalMsg"></p><div class="row"><button class="btn alt" id="modalNo">取消</button><button class="btn" id="modalYes">確定</button></div></div></div>
+<div class="modal" id="modal" hidden></div>
 
 <script>
 /* =========================================================
@@ -557,6 +557,8 @@ const findWord = w => allWords.find(x => x.w === w);
 
 function ask(msg, onYes){
   const m = document.getElementById('modal');
+  // 對話框的內容等到要用時才產生，網頁原始碼裡就不會有「取消」「確定」（LINE 等 App 抓預覽時才不會抓錯）
+  m.innerHTML = '<div class="box"><p id="modalMsg"></p><div class="row"><button class="btn alt" id="modalNo">取消</button><button class="btn" id="modalYes">確定</button></div></div>';
   document.getElementById('modalMsg').textContent = msg;
   m.hidden = false;
   document.getElementById('modalNo').onclick = () => { m.hidden = true; };
