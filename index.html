@@ -93,7 +93,11 @@ button:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 
 /* 戰場 */
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
-.topbar b{font-family:var(--display);font-weight:900;letter-spacing:.08em;font-size:18px}
+.topbar b{font-family:var(--display);font-weight:900;letter-spacing:.04em;font-size:clamp(14px,4vw,18px);text-align:center;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:420px){ .tbtn{padding:8px 9px} .topbar{gap:6px} }
+.tgrp{display:flex;gap:6px;flex:none}
+#mute{padding:8px 10px}
+#mute svg{width:18px;height:18px}
 .tbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;box-shadow:inset 0 0 0 1.5px #ffffff2e;font-weight:700;font-size:14px;min-height:40px}
 .tbtn svg{width:16px;height:16px}
 .field{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 10px 24px #0000004d}
@@ -522,7 +526,7 @@ GROUPS.forEach(wk => {
   });
   const all = wk.units.flatMap(u => u.words).filter((x,i,arr) => arr.findIndex(y => y.w === x.w) === i);
   STAGES.push({ id:`${wk.id}-quiz`, week:wk, quiz:true, words:all, theme:'autumn', tier:3, boss:true, speed:QUIZ.speed, every:QUIZ.every,
-                title: wk === HF ? '高頻單字　綜合挑戰' : `${wk.name}　小考模擬` });
+                title: wk === HF ? '高頻綜合挑戰' : `${wk.name} 小考模擬` });
 });
 
 /* ---------- 存檔（只存在這台裝置的瀏覽器） ---------- */
@@ -574,11 +578,65 @@ function speak(text){
   }catch(e){}
 }
 
+/* ---------- 音效：用 Web Audio 即時合成，不用下載音檔 ---------- */
+let AC = null, MASTER = null, NOISE = null;
+function audio(){
+  if(S.mute) return null;
+  try{
+    if(!AC){
+      const C = window.AudioContext || window.webkitAudioContext; if(!C) return null;
+      AC = new C(); MASTER = AC.createGain(); MASTER.gain.value = .45; MASTER.connect(AC.destination);
+      NOISE = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = NOISE.getChannelData(0); for(let i=0;i<d.length;i++) d[i] = Math.random()*2 - 1;
+    }
+    if(AC.state === 'suspended') AC.resume();
+    return AC;
+  }catch(e){ return null; }
+}
+function env(gn, t, vol, dur, attack){
+  gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(vol, t + attack);
+  gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+}
+function tone(freq, dur, o = {}){
+  const t = AC.currentTime + (o.delay || 0), osc = AC.createOscillator(), gn = AC.createGain();
+  osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(freq, t);
+  if(o.slide) osc.frequency.linearRampToValueAtTime(Math.max(20, freq + o.slide), t + dur);
+  env(gn, t, o.vol || .3, dur, o.attack || .005);
+  osc.connect(gn); gn.connect(MASTER); osc.start(t); osc.stop(t + dur + .05);
+}
+function noise(dur, o = {}){
+  const t = AC.currentTime + (o.delay || 0), src = AC.createBufferSource(), f = AC.createBiquadFilter(), gn = AC.createGain();
+  src.buffer = NOISE; f.type = o.filter || 'bandpass'; f.frequency.setValueAtTime(o.freq || 1000, t); f.Q.value = o.q || 1;
+  if(o.slide) f.frequency.linearRampToValueAtTime(Math.max(40, (o.freq || 1000) + o.slide), t + dur);
+  env(gn, t, o.vol || .3, dur, o.attack || .004);
+  src.connect(f); f.connect(gn); gn.connect(MASTER); src.start(t, Math.random()*.5); src.stop(t + dur + .05);
+}
+const SFX = {
+  shoot(){ tone(330, .13, { type:'triangle', vol:.16, slide:-210 }); noise(.05, { vol:.12, filter:'highpass', freq:3000 }); },
+  hit(){ noise(.13, { vol:.32, filter:'lowpass', freq:700 }); tone(150, .13, { vol:.28, slide:-90 }); },
+  kill(){ SFX.hit(); tone(520, .09, { type:'triangle', vol:.08, delay:.06 }); tone(780, .12, { type:'triangle', vol:.08, delay:.12 }); },
+  miss(){ noise(.22, { vol:.1, freq:1400, q:.8, slide:-900 }); tone(95, .07, { vol:.16, delay:.2 }); noise(.05, { vol:.12, filter:'lowpass', freq:500, delay:.2 }); },
+  shield(){ [0,.045,.1].forEach((d,i) => noise(.08, { vol:.32, freq:1700 - i*350, q:4, delay:d })); tone(210, .16, { type:'square', vol:.05, slide:-130 }); },
+  newEnemy(){ tone(660, .1, { type:'triangle', vol:.13 }); tone(880, .16, { type:'triangle', vol:.13, delay:.11 }); },
+  boss(){
+    tone(98, 1.1, { type:'sawtooth', vol:.09, attack:.12 }); tone(147, 1.1, { type:'sawtooth', vol:.06, attack:.12 });
+    [0,.38,.76].forEach(d => { tone(62, .28, { vol:.42, slide:-30, delay:d }); noise(.09, { vol:.14, filter:'lowpass', freq:220, delay:d }); });
+  },
+  boulder(){ noise(.75, { vol:.1, freq:500, q:.6, slide:-350 }); tone(55, .45, { vol:.5, slide:-25, delay:.82 }); noise(.35, { vol:.3, filter:'lowpass', freq:320, delay:.82 }); },
+  combo(){ tone(784, .09, { type:'triangle', vol:.12 }); tone(1047, .14, { type:'triangle', vol:.12, delay:.08 }); },
+  wall(){ tone(72, .32, { vol:.5, slide:-32 }); noise(.22, { vol:.28, filter:'lowpass', freq:260 }); },
+  win(){ [523,659,784,1047].forEach((f,i) => tone(f, i === 3 ? .5 : .22, { type:'triangle', vol:.15, delay:i*.12 })); },
+  lose(){ [392,330,262,196].forEach((f,i) => tone(f, .34, { type:'triangle', vol:.13, delay:i*.18 })); },
+};
+function sfx(name){ try{ if(audio()) SFX[name](); }catch(e){} }
+
 /* ---------- 圖示（內嵌 SVG） ---------- */
 const IC = {
   star:on => `<svg viewBox="0 0 24 24"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" fill="${on?'#c9932e':'none'}" stroke="${on?'#9c6f1c':'#9aa3a0'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   shield:on => `<svg viewBox="0 0 24 24"><path d="M12 2.5l8 3v6.2c0 4.8-3.4 8.2-8 9.8-4.6-1.6-8-5-8-9.8V5.5z" fill="${on?'#e9ece4':'none'}" stroke="${on?'#e9ece4':'#6b7a7a'}" stroke-width="1.8" stroke-linejoin="round"/>${on?'<path d="M12 6v12M7.5 10.5h9" stroke="#2f4a5e" stroke-width="1.8"/>':''}</svg>`,
   gem:on => `<svg viewBox="0 0 24 24"><path d="M12 3l7 9-7 9-7-9z" fill="${on?'#c9932e':'none'}" stroke="${on?'#c9932e':'#6b7a7a'}" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  soundOn:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 010 6M18 6.5a8 8 0 010 11"/></svg>`,
+  soundOff:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>`,
   speaker:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 010 6M18 6.5a8 8 0 010 11"/></svg>`,
   pause:`<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`,
   play:`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>`,
@@ -973,7 +1031,7 @@ function startGame(cfg){
     <div class="topbar">
       <button class="tbtn" id="back">${IC.back}撤退</button>
       <b>${esc(cfg.title)}</b>
-      <button class="tbtn" id="pause">${IC.pause}暫停</button>
+      <span class="tgrp"><button class="tbtn" id="mute" aria-label="音效開關">${S.mute ? IC.soundOff : IC.soundOn}</button><button class="tbtn" id="pause">${IC.pause}暫停</button></span>
     </div>
     <div class="field"><canvas id="cv" width="${W*DPR}" height="${H*DPR}" aria-label="戰場畫面"></canvas></div>
     <div class="hud">
@@ -983,6 +1041,13 @@ function startGame(cfg){
     </div>
     <div class="qp" id="qp"></div>`;
   G.cv = document.getElementById('cv'); G.g = G.cv.getContext('2d');
+  audio();   // 在按下開始的那一下解鎖音效（手機瀏覽器規定要使用者點擊後才能出聲）
+  document.getElementById('mute').onclick = () => {
+    S.mute = !S.mute; save();
+    const b = document.getElementById('mute'); b.innerHTML = S.mute ? IC.soundOff : IC.soundOn;
+    b.setAttribute('aria-pressed', S.mute ? 'true' : 'false');
+    if(!S.mute) sfx('combo');
+  };
   document.getElementById('back').onclick = () => { const was = G.paused; G.paused = true; ask('確定要撤退嗎？這一場的進度不會保留。', () => { stopGame(); showMap(); }); document.getElementById('modalNo').onclick = () => { document.getElementById('modal').hidden = true; G.paused = was; syncPause(); }; };
   document.getElementById('pause').onclick = () => { G.paused = !G.paused; syncPause(); };
   hud(); renderWait();
@@ -1006,8 +1071,8 @@ function spawn(){
   const color = kind === 'runner' ? ['#3f7a6a','#4f6f86'][Math.floor(Math.random()*2)] : kind === 'boss' ? '#4a2f45' : G.T.enemy[Math.floor(Math.random()*G.T.enemy.length)];
   G.enemies.push({ w, kind, hp:K.hp, maxHp:K.hp, spd:K.spd, dmg:K.dmg, x:W + (kind === 'boss' ? 44 : 24), state:'walk', t:Math.random()*3, dt:0, stun:0, flash:0, doomed:false, lastType:null,
                    scale:K.scale[0] + Math.random()*(K.scale[1]-K.scale[0]), horn: kind === 'boss' ? 0 : kind === 'runner' ? 1 : Math.floor(Math.random()*3), color });
-  if(kind !== 'grunt' && !S.seen[kind]){ S.seen[kind] = true; save(); G.banner = { text:`新敵人：${K.name}　${K.short}`, t:2.8 }; }
-  else if(kind === 'boss') G.banner = { text:`魔王登場　${K.short}`, t:2.4 };
+  if(kind !== 'grunt' && !S.seen[kind]){ S.seen[kind] = true; save(); G.banner = { text:`新敵人：${K.name}　${K.short}`, t:2.8 }; sfx(kind === 'boss' ? 'boss' : 'newEnemy'); }
+  else if(kind === 'boss'){ G.banner = { text:`魔王登場　${K.short}`, t:2.4 }; sfx('boss'); }
   hud();
 }
 function ink(x,y,col,n=14,spd=120){
@@ -1034,7 +1099,7 @@ function update(dt){
     }else if(e.state === 'attack'){
       e.dt += dt;
       if(e.dt > .45 && !e.hitDone){
-        e.hitDone = true; G.hp = Math.max(0, G.hp - e.dmg); G.breached++; G.shake = .4 + .2*(e.dmg-1); for(let c=0;c<e.dmg;c++) addCrack();
+        e.hitDone = true; G.hp = Math.max(0, G.hp - e.dmg); G.breached++; G.shake = .4 + .2*(e.dmg-1); for(let c=0;c<e.dmg;c++) addCrack(); sfx('wall');
         G.missed.add(e.w.w); S.wrong[e.w.w] = (S.wrong[e.w.w] || 0) + 1; save();
         ink(STOP_X-6, GROUND-14, '#8a8f8c', 10, 90); hud();
       }
@@ -1047,15 +1112,16 @@ function update(dt){
       a.done = true;
       if(a.hit && a.e.state !== 'gone'){
         const e = a.e; e.hp--; e.flash = .15;
-        if(e.hp <= 0){ e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100); }
+        if(e.hp <= 0){ sfx('kill'); e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100); }
         else {
           e.doomed = false; e.x = Math.min(W-10, e.x + 18);
+          sfx(e.kind === 'shield' && e.hp === 1 ? 'shield' : 'hit');
           if(e.kind === 'shield' && e.hp === 1) ink(e.x - 14*e.scale, GROUND-14*e.scale, '#8a5a34', 18, 150);
           else ink(e.x, GROUND-18*e.scale, e.color, 8, 110);
         }
         hud();
       }
-      else if(!a.hit){ G.stuck.push({ x:a.x1, y:a.y1, ang:a.endAng, life:3 }); ink(a.x1, a.y1, G.T.pathD, 6, 50); }
+      else if(!a.hit){ sfx('miss'); G.stuck.push({ x:a.x1, y:a.y1, ang:a.endAng, life:3 }); ink(a.x1, a.y1, G.T.pathD, 6, 50); }
     }
   }
   G.arrows = G.arrows.filter(a => !a.done);
@@ -1195,7 +1261,7 @@ function answer(j){
     const lead = e.stun > 0 ? 0 : G.cfg.speed*e.spd*.45;
     const left = e.hp - 1;
     G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 14*e.scale, t:0, dur:.45, arc:34, hit:true, e });
-    G.right++; G.streak++;
+    G.right++; G.streak++; sfx('shoot');
     if(S.wrong[x.w]){ S.wrong[x.w]--; if(S.wrong[x.w] <= 0) delete S.wrong[x.w]; }
     const more = left <= 0 ? '' : e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對 1 次</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
     fb.innerHTML = `<span class="good">命中</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
@@ -1205,12 +1271,12 @@ function answer(j){
       const ws = G.enemies.filter(z => z.state === 'walk' && z !== e);
       if(ws.length){
         const mid = ws.reduce((s,z) => s + z.x, 0) / ws.length;
-        G.boulder = { x0:70, y0:60, x1:mid, y1:GROUND, t:0, dur:.85 };
+        G.boulder = { x0:70, y0:60, x1:mid, y1:GROUND, t:0, dur:.85 }; sfx('boulder');
         G.banner = { text:`連擊 ${G.streak}　投石擊退`, t:1.6 };
-      }else G.banner = { text:`連擊 ${G.streak}`, t:1.2 };
+      }else { G.banner = { text:`連擊 ${G.streak}`, t:1.2 }; sfx('combo'); }
     }
   }else{
-    btns[j].classList.add('no');
+    btns[j].classList.add('no'); sfx('shoot');
     G.arrows.push({ x0:142, y0:96, x1:e.x + 26 + Math.random()*30, y1:GROUND+6, t:0, dur:.5, arc:30, hit:false, e });
     e.x = Math.max(STOP_X, e.x - 24);
     G.streak = 0;
@@ -1224,6 +1290,7 @@ function answer(j){
 }
 
 function finish(won){
+  sfx(won ? 'win' : 'lose');
   G.over = true; G.won = won; G.endIn = 1.3; G.cur = null;
   if(!won) G.banner = { text:'城門被攻破了', t:1.3 };
   else G.banner = { text:'守城成功', t:1.3 };
