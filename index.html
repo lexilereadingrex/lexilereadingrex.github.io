@@ -1370,7 +1370,7 @@ function showMap(){
       <button class="btn quiet" id="toHelp">玩法說明</button>
       <button class="btn quiet" id="toInfo">相關資訊</button>
     </div>
-    <p class="foot">單字與例句取自藍思閱讀單字講義。進度只存在這台裝置的瀏覽器，不會上傳。</p>`;
+    `;
   document.querySelectorAll('[data-thumb]').forEach(cv => paintStill(cv, cv.dataset.thumb));
   document.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => { S.sec = b.dataset.sec; save(); showMap(); });
   document.querySelectorAll('[data-week]').forEach(b => b.onclick = () => { S.week = b.dataset.week; save(); showMap(); });
