@@ -73,6 +73,13 @@ button:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 .part{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
 .part:last-child{border-bottom:1px solid var(--line)}
 .part .stars svg{width:16px;height:16px;vertical-align:-2px}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:2px;line-height:1.6}
+.t0{background:#dbe6d7;color:#3e6a3a}.t1{background:#ebe2c8;color:#7a5a12}.t2{background:#efd9d5;color:#8a3a2f}.t3{background:#e2d6e4;color:#5a3360}
+.bestiary{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:10px;margin:0 0 14px}
+.beast{background:var(--panel);color:var(--ink);border-radius:10px;display:flex;gap:12px;align-items:center;padding:10px}
+.beast canvas{width:96px;height:auto;aspect-ratio:150/116;border-radius:6px;flex:none}
+.beast b{font-family:var(--display);font-size:17px;letter-spacing:.06em}
+.beast p{margin:2px 0 0;font-size:14px;color:var(--muted);line-height:1.5}
 .btn.sm{min-height:40px;padding:6px 14px;font-size:15px}
 .pill{font-family:var(--latin);font-weight:700;font-size:14px;border:1.5px solid var(--line);border-radius:4px;padding:0 8px;color:var(--steel)}
 .meta{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:14px;flex-wrap:wrap}
@@ -475,6 +482,31 @@ const MAX_HP = 5;          // 城牆耐久
 const COMBO = 3;           // 連續答對幾題觸發投石
 const SAVE_KEY = 'lexile_keep_w_v1';
 
+/* 怪物：hp＝要答對幾次、spd＝速度倍率、dmg＝衝到城下扣幾點耐久。
+   tier（難度）0 入門：只有墨角兵；1 進階：加入疾行鬼；2 挑戰：再加入盾甲兵；3 小考／綜合：混合＋最後一隻魔王。 */
+const KINDS = {
+  grunt: { name:'墨角兵', short:'',            hp:1, spd:1,    dmg:1, scale:[.9,1.12],   desc:'最常見的敵人，一般速度，答對 1 次就擊退。' },
+  runner:{ name:'疾行鬼', short:'走得特別快',   hp:1, spd:1.55, dmg:1, scale:[.76,.84],   desc:'圍著圍巾、身體前傾，走得比別人快一半，要快點作答。' },
+  shield:{ name:'盾甲兵', short:'要答對 2 次',  hp:2, spd:.78,  dmg:1, scale:[1.08,1.16], desc:'戴頭盔、拿木盾，走得慢。第一箭打碎盾牌，再答對一次才會擊退。' },
+  boss:  { name:'魔王',   short:'要答對 3 次',  hp:3, spd:.6,   dmg:2, scale:[1.62,1.62], desc:'小考模擬和綜合挑戰的最後一隻。要答對 3 次，衝到城下會扣 2 點耐久。' },
+};
+const TIER_NAME = ['入門','進階','挑戰','魔王'];
+const MIX  = [ {grunt:1}, {grunt:.7, runner:.3}, {grunt:.45, runner:.3, shield:.25}, {grunt:.4, runner:.3, shield:.3} ];
+const MUST = [ {}, {runner:2}, {runner:1, shield:2}, {runner:2, shield:2} ];
+function planKinds(n, tier, boss){
+  const roll = () => { let r = Math.random(), acc = 0; for(const [k,p] of Object.entries(MIX[tier])){ acc += p; if(r < acc) return k; } return 'grunt'; };
+  const ks = Array.from({length:n}, roll);
+  ks[0] = 'grunt';                                   // 第一隻一定是一般敵人，讓學生先暖身
+  const last = boss ? n-1 : n;
+  for(const [k,need] of Object.entries(MUST[tier])){
+    let have = ks.filter(x => x === k).length;
+    const free = shuffle(ks.map((x,i) => i).filter(i => i > 0 && i < last && ks[i] === 'grunt'));
+    while(have < need && free.length){ ks[free.pop()] = k; have++; }
+  }
+  if(boss && n > 1) ks[n-1] = 'boss';
+  return ks;
+}
+
 const GROUPS = [...WEEKS, HF];                    // 每週講義＋高頻單字區
 const STAGES = [];
 GROUPS.forEach(wk => {
@@ -484,18 +516,19 @@ GROUPS.forEach(wk => {
     for(let k=0, a=0; k<n; k++){
       const len = Math.min(size - (k >= n - (n*size - u.words.length) ? 1 : 0), u.words.length - a);
       const words = u.words.slice(a, a+len), from = a+1, to = a+len; a += len;
-      STAGES.push({ id:`${wk.id}-${u.id}-${k+1}`, week:wk, unit:u, words, from, to, theme:u.theme, speed:SPEED, every:EVERY, title:`${u.zh}　${from}–${to}` });
+      const tier = n >= 3 ? Math.min(k,2) : Math.min(k+1,2);
+      STAGES.push({ id:`${wk.id}-${u.id}-${k+1}`, week:wk, unit:u, words, from, to, theme:u.theme, tier, speed:SPEED*(1+.05*tier), every:EVERY, title:`${u.zh}　${from}–${to}` });
     }
   });
   const all = wk.units.flatMap(u => u.words).filter((x,i,arr) => arr.findIndex(y => y.w === x.w) === i);
-  STAGES.push({ id:`${wk.id}-quiz`, week:wk, quiz:true, words:all, theme:'autumn', speed:QUIZ.speed, every:QUIZ.every,
+  STAGES.push({ id:`${wk.id}-quiz`, week:wk, quiz:true, words:all, theme:'autumn', tier:3, boss:true, speed:QUIZ.speed, every:QUIZ.every,
                 title: wk === HF ? '高頻單字　綜合挑戰' : `${wk.name}　小考模擬` });
 });
 
 /* ---------- 存檔（只存在這台裝置的瀏覽器） ---------- */
 function load(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }catch(e){ return {}; } }
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
-const S = Object.assign({ stars:{}, wrong:{}, week:'w1', sec:'weekly' }, load());
+const S = Object.assign({ stars:{}, wrong:{}, week:'w1', sec:'weekly', seen:{} }, load());
 
 /* ---------- 小工具 ---------- */
 const $app = document.getElementById('app');
@@ -747,7 +780,7 @@ function drawArcher(g,T,pull){
 }
 function drawEnemy(g,e,T,target){
   if(e.state === 'gone') return;
-  const s = e.scale;
+  const s = e.scale, kind = e.kind || 'grunt';
   let alpha = 1, rot = 0, dy = 0;
   if(e.state === 'die'){ const p = Math.min(1, e.dt/.55); alpha = 1-p; rot = p*1.1; dy = -Math.sin(p*Math.PI)*12; }
   if(e.state === 'attack' && e.dt > .7){ alpha = Math.max(0, 1-(e.dt-.7)/.25); }
@@ -761,52 +794,114 @@ function drawEnemy(g,e,T,target){
   }
   g.translate(e.x, GROUND+6+dy); g.rotate(rot);
   const moving = e.state === 'walk' && e.stun <= 0;
-  const wk = moving ? e.t*9 : 0;
+  const wk = moving ? e.t*(kind === 'runner' ? 14 : kind === 'boss' ? 6 : 9) : 0;
   g.fillStyle = T.ink;
-  ell(g, -5 + Math.sin(wk)*3, 0, 4.6, 2.6); g.fill();
-  ell(g,  5 - Math.sin(wk)*3, 0, 4.6, 2.6); g.fill();
+  const fs = Math.max(1, s*.9);
+  ell(g, (-5 + Math.sin(wk)*3)*fs, 0, 4.6*fs, 2.6*fs); g.fill();
+  ell(g, ( 5 - Math.sin(wk)*3)*fs, 0, 4.6*fs, 2.6*fs); g.fill();
   g.translate(0, -Math.abs(Math.sin(wk))*2 - 1);
+  if(kind === 'runner' && moving) g.rotate(-.13);
   const h = 30*s, w = 13*s;
-  // 棍棒（拿在面向城堡的那一手）
-  g.save(); g.translate(-w*.95, -h*.42);
-  const swing = e.state === 'attack' ? -1.3 + Math.sin(Math.min(e.dt,.6)/.6*Math.PI)*1.6 : -.45 + Math.sin(wk)*.15;
-  g.rotate(swing);
-  g.fillStyle = '#7a5634'; g.strokeStyle = T.ink; g.lineWidth = 1.5;
-  g.fillRect(-1.6,-15,3.4,15); g.strokeRect(-1.6,-15,3.4,15);
-  ell(g,0,-17,4.2,5.6); g.fill(); g.stroke();
-  g.restore();
+  const bodyPath = () => { g.beginPath(); g.moveTo(0,-h); g.bezierCurveTo(w*1.25,-h, w*1.3,-3, w*.8,-2); g.quadraticCurveTo(0,1,-w*.8,-2); g.bezierCurveTo(-w*1.3,-3,-w*1.25,-h,0,-h); g.closePath(); };
+  // 魔王的披風（在身體後面）
+  if(kind === 'boss'){
+    const fl = Math.sin(e.t*3)*3;
+    g.beginPath(); g.moveTo(-w*.55,-h*.78); g.quadraticCurveTo(w*1.2,-h*.85, w*1.75+fl,-h*.05); g.lineTo(w*1.2+fl*.6,-1); g.quadraticCurveTo(w*.6,-h*.2, w*.1,-h*.55); g.closePath();
+    g.fillStyle = '#7a2b2b'; g.fill(); g.strokeStyle = T.ink; g.lineWidth = 2; g.stroke();
+  }
+  // 疾行鬼的圍巾（往後飄）
+  if(kind === 'runner'){
+    const f1 = Math.sin(e.t*13)*3, f2 = Math.sin(e.t*13+1.3)*4;
+    g.beginPath(); g.moveTo(w*.35,-h*.6); g.quadraticCurveTo(w*1.5,-h*.72+f1, w*2.5,-h*.55+f2); g.lineTo(w*2.35,-h*.4+f2);
+    g.quadraticCurveTo(w*1.4,-h*.48+f1, w*.4,-h*.45); g.closePath();
+    g.fillStyle = '#c9932e'; g.fill(); g.strokeStyle = T.ink; g.lineWidth = 1.5; g.stroke();
+  }
+  // 武器：棍棒（盾甲兵拿著盾時不拿棍棒；疾行鬼空手）
+  const hasShield = kind === 'shield' && e.hp >= 2;
+  if(!hasShield && kind !== 'runner'){
+    g.save(); g.translate(-w*.95, -h*.42);
+    const swing = e.state === 'attack' ? -1.3 + Math.sin(Math.min(e.dt,.6)/.6*Math.PI)*1.6 : -.45 + Math.sin(wk)*.15;
+    g.rotate(swing); const cs = Math.max(1, s*.85); g.scale(cs, cs);
+    g.fillStyle = '#7a5634'; g.strokeStyle = T.ink; g.lineWidth = 1.5;
+    g.fillRect(-1.6,-15,3.4,15); g.strokeRect(-1.6,-15,3.4,15);
+    ell(g,0,-17,4.2,5.6); g.fill(); g.stroke();
+    if(kind === 'boss'){ g.fillStyle = '#c9cfd2'; [[-3,-19],[3,-15],[-2,-13]].forEach(([x,y]) => { g.beginPath(); g.moveTo(x,y); g.lineTo(x-3*Math.sign(x||1),y-1.5); g.lineTo(x,y+2); g.closePath(); g.fill(); g.stroke(); }); }
+    g.restore();
+  }
   // 身體
-  g.beginPath(); g.moveTo(0,-h);
-  g.bezierCurveTo(w*1.25,-h, w*1.3,-3, w*.8,-2);
-  g.quadraticCurveTo(0,1,-w*.8,-2);
-  g.bezierCurveTo(-w*1.3,-3,-w*1.25,-h,0,-h);
-  g.closePath(); g.fillStyle = e.color; g.fill();
+  bodyPath(); g.fillStyle = e.color; g.fill();
   g.strokeStyle = T.ink; g.lineWidth = 2; g.stroke();
-  g.save(); g.clip(); g.fillStyle = 'rgba(0,0,0,.16)'; ell(g, w*.9, -h*.4, w*.6, h*.75); g.fill(); g.restore();
+  g.save(); bodyPath(); g.clip(); g.fillStyle = 'rgba(0,0,0,.16)'; ell(g, w*.9, -h*.4, w*.6, h*.75); g.fill(); g.restore();
   g.fillStyle = 'rgba(255,255,255,.14)'; ell(g, -1, -h*.28, w*.55, h*.2); g.fill();
-  // 角
-  g.fillStyle = '#e8dfc9'; g.lineWidth = 1.5;
-  const horn = side => { g.beginPath(); g.moveTo(side*w*.32,-h*.9); g.quadraticCurveTo(side*w*.95,-h*1.05, side*w*.78,-h*1.32); g.quadraticCurveTo(side*w*.55,-h*1.08, side*w*.08,-h*.98); g.closePath(); g.fill(); g.stroke(); };
-  if(e.horn === 0){ horn(-1); horn(1); }
-  else if(e.horn === 1){ g.beginPath(); g.moveTo(-w*.25,-h*.97); g.quadraticCurveTo(-w*.1,-h*1.35, w*.18,-h*1.38); g.quadraticCurveTo(w*.05,-h*1.1, w*.25,-h*.97); g.closePath(); g.fill(); g.stroke(); }
-  else { g.fillStyle = e.color; [-1,1].forEach(sd => { ell(g, sd*w*.7, -h*.92, w*.32, h*.2); g.fill(); g.stroke(); }); }
+  if(kind === 'runner'){ g.fillStyle = '#c9932e'; g.strokeStyle = T.ink; g.lineWidth = 1.3; g.beginPath(); g.ellipse(0,-h*.5,w*.78,h*.08,0,0,Math.PI*2); g.fill(); g.stroke(); }
+  // 頭頂：盾甲兵戴頭盔，其他長角
+  g.strokeStyle = T.ink;
+  if(kind === 'shield'){
+    g.beginPath(); g.arc(0,-h*.8, w*.92, Math.PI*1.04, Math.PI*1.96); g.closePath();
+    g.fillStyle = '#8b959a'; g.fill(); g.lineWidth = 1.8; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(0,-h*.8, w*.7, Math.PI*1.2, Math.PI*1.45); g.lineTo(0,-h*.8); g.closePath(); g.fill();
+    g.fillStyle = '#6d777c'; g.fillRect(-w*.95,-h*.84,w*1.9,h*.07); g.strokeRect(-w*.95,-h*.84,w*1.9,h*.07);
+    g.fillStyle = '#8b959a'; g.beginPath(); g.moveTo(-2,-h*.8-w*.9); g.lineTo(0,-h*.8-w*.9-6); g.lineTo(2,-h*.8-w*.9); g.closePath(); g.fill(); g.stroke();
+  }else{
+    g.fillStyle = '#e8dfc9'; g.lineWidth = 1.5;
+    const horn = side => { g.beginPath(); g.moveTo(side*w*.32,-h*.9); g.quadraticCurveTo(side*w*.95,-h*1.05, side*w*.78,-h*1.32); g.quadraticCurveTo(side*w*.55,-h*1.08, side*w*.08,-h*.98); g.closePath(); g.fill(); g.stroke(); };
+    if(e.horn === 0){ horn(-1); horn(1); }
+    else if(e.horn === 1){ g.beginPath(); g.moveTo(-w*.25,-h*.97); g.quadraticCurveTo(-w*.1,-h*1.35, w*.18,-h*1.38); g.quadraticCurveTo(w*.05,-h*1.1, w*.25,-h*.97); g.closePath(); g.fill(); g.stroke(); }
+    else { g.fillStyle = e.color; [-1,1].forEach(sd => { ell(g, sd*w*.7, -h*.92, w*.32, h*.2); g.fill(); g.stroke(); }); }
+    if(kind === 'boss'){
+      g.beginPath(); g.moveTo(-w*.42,-h*.96); g.lineTo(-w*.48,-h*1.16); g.lineTo(-w*.22,-h*1.05); g.lineTo(0,-h*1.22); g.lineTo(w*.22,-h*1.05); g.lineTo(w*.48,-h*1.16); g.lineTo(w*.42,-h*.96); g.closePath();
+      g.fillStyle = '#d9a640'; g.fill(); g.lineWidth = 1.6; g.stroke();
+      g.fillStyle = '#a8463a'; circle(g,0,-h*1.03,1.8); g.fill();
+    }
+  }
   // 眼睛（看向左邊的城堡）
-  const ey = -h*.62, ex = -w*.3;
+  const ey = -h*.62, ex = -w*.3, er = kind === 'boss' ? 1.35 : 1;
   const stunned = e.stun > 0;
-  [[ex-4,3.3],[ex+4,3.6]].forEach(([cx,rr]) => {
-    g.fillStyle = '#f4efe2'; ell(g,cx,ey,rr,rr*1.12); g.fill(); g.strokeStyle = T.ink; g.lineWidth = 1.2; g.stroke();
+  [[ex-4*er,3.3*er],[ex+4*er,3.6*er]].forEach(([cx,rr]) => {
+    g.fillStyle = kind === 'boss' ? '#f2d8a0' : '#f4efe2'; ell(g,cx,ey,rr,rr*1.12); g.fill(); g.strokeStyle = T.ink; g.lineWidth = 1.2; g.stroke();
     if(stunned){ g.strokeStyle = T.ink; g.lineWidth = 1.2; g.beginPath(); g.moveTo(cx-1.8,ey-1.8); g.lineTo(cx+1.8,ey+1.8); g.moveTo(cx+1.8,ey-1.8); g.lineTo(cx-1.8,ey+1.8); g.stroke(); }
-    else { g.fillStyle = T.eye; circle(g,cx-1.1,ey+.3,1.7); g.fill(); }
+    else { g.fillStyle = kind === 'boss' ? '#a8463a' : T.eye; circle(g,cx-1.1*er,ey+.3,1.7*er); g.fill(); }
   });
   g.strokeStyle = T.ink; g.lineWidth = 1.6;
-  g.beginPath(); g.moveTo(ex-7,ey-5.5); g.lineTo(ex-1.5,ey-3.5); g.moveTo(ex+1.5,ey-3.5); g.lineTo(ex+7.5,ey-5.8); g.stroke();
-  g.lineWidth = 1.3; g.beginPath(); g.moveTo(ex-4,-h*.33); g.lineTo(ex-2,-h*.37); g.lineTo(ex,-h*.33); g.lineTo(ex+2,-h*.37); g.lineTo(ex+4,-h*.33); g.stroke();
-  if(e.flash > 0){ g.globalAlpha = alpha * Math.min(1, e.flash/.12) * .7; g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0,-h); g.bezierCurveTo(w*1.25,-h, w*1.3,-3, w*.8,-2); g.quadraticCurveTo(0,1,-w*.8,-2); g.bezierCurveTo(-w*1.3,-3,-w*1.25,-h,0,-h); g.fill(); }
-  g.restore();
-  if(stunned){
-    g.fillStyle = '#e0aa3e';
-    for(let k=0;k<3;k++){ const a = e.t*6 + k*2.1; circle(g, e.x + Math.cos(a)*10, GROUND - 32*s - 4 + Math.sin(a)*3, 2); g.fill(); }
+  g.beginPath(); g.moveTo(ex-7*er,ey-5.5*er); g.lineTo(ex-1.5*er,ey-3.5*er); g.moveTo(ex+1.5*er,ey-3.5*er); g.lineTo(ex+7.5*er,ey-5.8*er); g.stroke();
+  g.lineWidth = 1.3; g.beginPath(); g.moveTo(ex-4*er,-h*.33); g.lineTo(ex-2*er,-h*.37); g.lineTo(ex,-h*.33); g.lineTo(ex+2*er,-h*.37); g.lineTo(ex+4*er,-h*.33); g.stroke();
+  // 盾牌（在最前面）
+  if(hasShield){
+    const sx = -w*1.02, sy = -h*.4, sr = w*.82;
+    g.fillStyle = '#8a5a34'; circle(g,sx,sy,sr); g.fill();
+    g.save(); circle(g,sx,sy,sr); g.clip(); g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1;
+    for(let k=-2;k<=2;k++){ g.beginPath(); g.moveTo(sx+k*sr*.4, sy-sr); g.lineTo(sx+k*sr*.4, sy+sr); g.stroke(); } g.restore();
+    g.strokeStyle = '#5d676c'; g.lineWidth = 3; circle(g,sx,sy,sr-1.5); g.stroke();
+    g.strokeStyle = T.ink; g.lineWidth = 1.3; circle(g,sx,sy,sr); g.stroke();
+    g.fillStyle = '#c9b48a'; circle(g,sx,sy,sr*.24); g.fill(); g.stroke();
   }
+  if(e.flash > 0){ g.globalAlpha = alpha * Math.min(1, e.flash/.12) * .7; g.fillStyle = '#fff'; bodyPath(); g.fill(); }
+  g.restore();
+  // 還要答對幾次（多血量的敵人頭上顯示）
+  if(e.maxHp > 1 && e.state === 'walk'){
+    const py = GROUND - 34*s - (target ? 30 : 16);
+    for(let k=0;k<e.maxHp;k++){
+      const px = e.x + (k - (e.maxHp-1)/2)*11;
+      g.fillStyle = k < e.hp ? '#a8463a' : 'rgba(255,255,255,.55)'; g.strokeStyle = T.ink; g.lineWidth = 1.3;
+      g.beginPath(); g.moveTo(px,py-5); g.lineTo(px+4.5,py); g.lineTo(px,py+5); g.lineTo(px-4.5,py); g.closePath(); g.fill(); g.stroke();
+    }
+  }
+  if(e.stun > 0){
+    g.fillStyle = '#e0aa3e';
+    for(let k=0;k<3;k++){ const a = e.t*6 + k*2.1; circle(g, e.x + Math.cos(a)*10*s, GROUND - 32*s - 4 + Math.sin(a)*3, 2); g.fill(); }
+  }
+}
+// 圖鑑用：在小畫布上畫一隻怪物
+function paintKind(cv, kind){
+  cv.width = 150*DPR; cv.height = 116*DPR;
+  const g = cv.getContext('2d'); g.setTransform(DPR,0,0,DPR,0,0);
+  const T = THEMES.forest, K = KINDS[kind];
+  g.fillStyle = '#e0e5dd'; g.fillRect(0,0,150,116);
+  g.fillStyle = '#c9d4c3'; g.fillRect(0,92,150,24);
+  const f = kind === 'boss' ? 1.12 : 1.75;
+  g.translate(kind === 'runner' ? 66 : 75, 96); g.scale(f, f); g.translate(0, -GROUND - 6);
+  drawEnemy(g, { x:0, kind, hp:K.hp, maxHp:K.hp, state:'show', t:1.3, stun:0, flash:0, scale:(K.scale[0]+K.scale[1])/2,
+                 horn: kind === 'boss' ? 0 : kind === 'runner' ? 1 : 0, color: kind === 'runner' ? '#3f7a6a' : kind === 'boss' ? '#4a2f45' : T.enemy[0] }, T, false);
 }
 function drawArrow(g,x,y,ang,T){
   g.save(); g.translate(x,y); g.rotate(ang);
@@ -856,7 +951,7 @@ function startGame(cfg){
   stopGame();
   const T = THEMES[cfg.theme];
   cfg = Object.assign({}, cfg, { speed: cfg.speed * PATH_K });
-  G = { cfg, T, bg:makeBg(cfg.theme), pool:cfg.pool, queue:shuffle(cfg.words), total:cfg.words.length,
+  G = { cfg, T, bg:makeBg(cfg.theme), pool:cfg.pool, queue:(ws => { const ks = planKinds(ws.length, cfg.tier || 0, cfg.boss); return ws.map((w,i) => ({ w, kind:ks[i] })); })(shuffle(cfg.words)), total:cfg.words.length,
         enemies:[], arrows:[], stuck:[], parts:[], cracks:[], boulder:null, banner:null,
         hp:MAX_HP, right:0, killed:0, breached:0, streak:0, missed:new Set(),
         time:0, spawnT:1.2, slowUntil:0, lock:0, cur:null, panel:'', pull:0, shake:0, paused:false, over:false, dead:false, last:0 };
@@ -893,9 +988,12 @@ function hud(){
 }
 
 function spawn(){
-  const w = G.queue.shift();
-  G.enemies.push({ w, x:W+24, state:'walk', t:Math.random()*3, dt:0, stun:0, flash:0, doomed:false, lastType:null,
-                   scale:.9 + Math.random()*.22, horn:Math.floor(Math.random()*3), color:G.T.enemy[Math.floor(Math.random()*G.T.enemy.length)] });
+  const { w, kind } = G.queue.shift(), K = KINDS[kind];
+  const color = kind === 'runner' ? ['#3f7a6a','#4f6f86'][Math.floor(Math.random()*2)] : kind === 'boss' ? '#4a2f45' : G.T.enemy[Math.floor(Math.random()*G.T.enemy.length)];
+  G.enemies.push({ w, kind, hp:K.hp, maxHp:K.hp, spd:K.spd, dmg:K.dmg, x:W + (kind === 'boss' ? 44 : 24), state:'walk', t:Math.random()*3, dt:0, stun:0, flash:0, doomed:false, lastType:null,
+                   scale:K.scale[0] + Math.random()*(K.scale[1]-K.scale[0]), horn: kind === 'boss' ? 0 : kind === 'runner' ? 1 : Math.floor(Math.random()*3), color });
+  if(kind !== 'grunt' && !S.seen[kind]){ S.seen[kind] = true; save(); G.banner = { text:`新敵人：${K.name}　${K.short}`, t:2.8 }; }
+  else if(kind === 'boss') G.banner = { text:`魔王登場　${K.short}`, t:2.4 };
   hud();
 }
 function ink(x,y,col,n=14,spd=120){
@@ -918,11 +1016,11 @@ function update(dt){
     e.t += dt; if(e.flash > 0) e.flash -= dt;
     if(e.state === 'walk'){
       if(e.stun > 0) e.stun -= dt;
-      else { e.x -= G.cfg.speed * slow * dt; if(e.x <= STOP_X){ e.x = STOP_X; e.state = 'attack'; e.dt = 0; } }
+      else { e.x -= G.cfg.speed * e.spd * slow * dt; if(e.x <= STOP_X){ e.x = STOP_X; e.state = 'attack'; e.dt = 0; } }
     }else if(e.state === 'attack'){
       e.dt += dt;
       if(e.dt > .45 && !e.hitDone){
-        e.hitDone = true; G.hp = Math.max(0, G.hp-1); G.breached++; G.shake = .4; addCrack();
+        e.hitDone = true; G.hp = Math.max(0, G.hp - e.dmg); G.breached++; G.shake = .4 + .2*(e.dmg-1); for(let c=0;c<e.dmg;c++) addCrack();
         G.missed.add(e.w.w); S.wrong[e.w.w] = (S.wrong[e.w.w] || 0) + 1; save();
         ink(STOP_X-6, GROUND-14, '#8a8f8c', 10, 90); hud();
       }
@@ -933,7 +1031,16 @@ function update(dt){
     a.t += dt;
     if(a.t >= a.dur && !a.done){
       a.done = true;
-      if(a.hit && a.e.state !== 'gone'){ a.e.state = 'die'; a.e.dt = 0; a.e.flash = .15; G.killed++; ink(a.e.x, GROUND-14*a.e.scale, a.e.color, 16, 140); ink(a.e.x, GROUND-14, G.T.ink, 6, 100); hud(); }
+      if(a.hit && a.e.state !== 'gone'){
+        const e = a.e; e.hp--; e.flash = .15;
+        if(e.hp <= 0){ e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100); }
+        else {
+          e.doomed = false; e.x = Math.min(W-10, e.x + 18);
+          if(e.kind === 'shield' && e.hp === 1) ink(e.x - 14*e.scale, GROUND-14*e.scale, '#8a5a34', 18, 150);
+          else ink(e.x, GROUND-18*e.scale, e.color, 8, 110);
+        }
+        hud();
+      }
       else if(!a.hit){ G.stuck.push({ x:a.x1, y:a.y1, ang:a.endAng, life:3 }); ink(a.x1, a.y1, G.T.pathD, 6, 50); }
     }
   }
@@ -943,7 +1050,7 @@ function update(dt){
     const b = G.boulder; b.t += dt;
     if(b.t >= b.dur){
       G.shake = .3; ink(b.x1, GROUND, G.T.pathD, 22, 160);
-      G.enemies.filter(e => e.state === 'walk').forEach(e => { e.x = Math.min(W-10, e.x + 70); e.stun = 1.8; e.flash = .12; });
+      G.enemies.filter(e => e.state === 'walk').forEach(e => { const k = e.kind === 'boss' ? .5 : 1; e.x = Math.min(W-10, e.x + 70*k); e.stun = 1.8*k; e.flash = .12; });
       G.boulder = null;
     }
   }
@@ -1071,12 +1178,15 @@ function answer(j){
   G.pull = 1;
   if(ok){
     e.doomed = true;
-    const lead = e.stun > 0 ? 0 : G.cfg.speed*.45;
+    const lead = e.stun > 0 ? 0 : G.cfg.speed*e.spd*.45;
+    const left = e.hp - 1;
     G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 14*e.scale, t:0, dur:.45, arc:34, hit:true, e });
     G.right++; G.streak++;
     if(S.wrong[x.w]){ S.wrong[x.w]--; if(S.wrong[x.w] <= 0) delete S.wrong[x.w]; }
-    fb.innerHTML = `<span class="good">命中</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}`;
-    G.lock = G.time + .8;
+    const more = left <= 0 ? '' : e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對 1 次</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
+    fb.innerHTML = `<span class="good">命中</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
+    G.lock = G.time + (left > 0 ? 1.1 : .8);
+    if(left > 0) G.cur.stale = true;
     if(G.streak % COMBO === 0){
       const ws = G.enemies.filter(z => z.state === 'walk' && z !== e);
       if(ws.length){
@@ -1113,7 +1223,7 @@ function showMap(){
   const wrongN = Object.keys(S.wrong).length;
   const idx = st => STAGES.indexOf(st);
   const parts = u => `<div class="parts">${STAGES.filter(st => st.unit === u).map(st => `<div class="part">
-      <span><b>第 ${st.from}–${st.to} 字</b>　${starsHtml(S.stars[st.id] || 0)}</span>
+      <span><b>第 ${st.from}–${st.to} 字</b><span class="tag t${st.tier}">${TIER_NAME[st.tier]}</span>　${starsHtml(S.stars[st.id] || 0)}</span>
       <button class="btn sm" data-play="${idx(st)}">${IC.sword}守城</button>
     </div>`).join('')}</div>`;
   const quiz = STAGES.find(st => st.week === wk && st.quiz);
@@ -1194,7 +1304,7 @@ function playStage(i){
   const st = STAGES[i];
   const words = st.quiz ? pick(st.words, Math.min(QUIZ.n, st.words.length)) : st.words;
   const pool = st.quiz ? st.words : st.unit.words;
-  startGame({ title:st.title, theme:st.theme, words, pool, speed:st.speed, every:st.every, stage:i });
+  startGame({ title:st.title, theme:st.theme, words, pool, speed:st.speed, every:st.every, stage:i, tier:st.tier, boss:!!st.boss });
 }
 
 function topbar(title, back = showMap){
@@ -1306,9 +1416,13 @@ function showHelp(){
       <p>敵人走到城門會敲城牆一下。城牆有 ${MAX_HP} 點耐久，全部用完就失敗。守住時城牆完好拿 3 顆星，剩 3～4 點拿 2 顆星，剩 1～2 點拿 1 顆星。</p>
       <p>首頁上方可以切換兩個單字區。<b>每週講義</b>：每個主題的 20 個字分成兩關，每週最後的小考模擬會從整週的字隨機抽 ${QUIZ.n} 個，適合小考前練習。<b>高頻單字</b>：Unit 1～${HF.units.length}，每個 Unit 分成三關，最後的綜合挑戰會從全部高頻單字隨機抽 ${QUIZ.n} 個。</p>
       <p>題型有四種：看英文選中文、看中文選英文、聽發音選單字、例句填空。用電腦玩可以按鍵盤 1～4 作答。</p>
+      <p>每一關標有難度：<span class="tag t0">入門</span>只有墨角兵，<span class="tag t1">進階</span>加入疾行鬼，<span class="tag t2">挑戰</span>再加入盾甲兵，<span class="tag t3">魔王</span>是小考模擬和綜合挑戰，最後會有魔王。要答對好幾次的敵人，頭上會顯示紅色菱形，答對一次少一顆。</p>
     </div>
+    <h3 class="lead" style="font-family:var(--display);font-weight:900;color:var(--onDark);font-size:18px;letter-spacing:.08em;margin:6px 0 10px">怪物圖鑑</h3>
+    <div class="bestiary">${Object.entries(KINDS).map(([k,K]) => `<div class="beast"><canvas data-kind="${k}" aria-hidden="true"></canvas><div><b>${K.name}</b><p>${K.desc}</p></div></div>`).join('')}</div>
     <button class="btn quiet full" id="reset">清除這台裝置的進度</button>`;
-  document.getElementById('reset').onclick = () => ask('確定要清除所有星星和錯題紀錄嗎？', () => { S.stars = {}; S.wrong = {}; save(); showMap(); });
+  document.querySelectorAll('[data-kind]').forEach(cv => paintKind(cv, cv.dataset.kind));
+  document.getElementById('reset').onclick = () => ask('確定要清除所有星星和錯題紀錄嗎？', () => { S.stars = {}; S.wrong = {}; S.seen = {}; save(); showMap(); });
   scrollTo(0,0);
 }
 
