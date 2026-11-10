@@ -506,9 +506,10 @@ const KINDS = {
   grunt: { name:'墨角兵', short:'',            hp:1, spd:1,    dmg:1, scale:[.9,1.12],   desc:'最常見的敵人，一般速度，答對 1 次就擊退。' },
   runner:{ name:'疾行鬼', short:'走得特別快',   hp:1, spd:1.4, dmg:1, scale:[.76,.84],   desc:'圍著圍巾、身體前傾，走得比別人快，要快點作答。' },
   shield:{ name:'盾甲兵', short:'要答對 2 次',  hp:2, spd:.78,  dmg:1, scale:[1.08,1.16], desc:'戴頭盔、拿木盾，走得慢。第一箭打碎盾牌，再答對一次才會擊退。' },
-  boss:  { name:'魔王',   short:'要答對 3 次',  hp:3, spd:.6,   dmg:2, scale:[1.62,1.62], desc:'小考模擬和綜合挑戰的最後一隻。要答對 3 次，衝到城下會扣 2 點耐久。' },
+  boss:  { name:'魔王',   short:'答對 3 題才能攻擊', hp:1, spd:.5, dmg:2, scale:[1.62,1.62], desc:'每一關的最後三題由魔王登場，牠身上帶著 3 個單字。答對 1 題，弓箭手就蓄力一格，3 題全對蓄滿力量，才能射出金色巨箭打倒牠。衝到城下會扣 2 點耐久。' },
 };
-const TIER_NAME = ['入門','進階','挑戰','魔王'];
+const TIER_NAME = ['入門','進階','挑戰','綜合'];
+const BOSS_WORDS = 3;      // 每關最後幾題由魔王承擔（要答對幾題才能攻擊）
 const MIX  = [ {grunt:1}, {grunt:.7, runner:.3}, {grunt:.45, runner:.3, shield:.25}, {grunt:.4, runner:.3, shield:.3} ];
 const MUST = [ {}, {runner:2}, {runner:1, shield:2}, {runner:2, shield:2} ];
 function planKinds(n, tier, boss){
@@ -966,12 +967,13 @@ function drawEnemy(g,e,T,target){
   if(e.flash > 0){ g.globalAlpha = alpha * Math.min(1, e.flash/.12) * .7; g.fillStyle = '#fff'; bodyPath(); g.fill(); }
   g.restore();
   // 還要答對幾次（多血量的敵人頭上顯示）
-  if(e.maxHp > 1 && e.state === 'walk'){
-    const py = GROUND - 34*s - (target ? 30 : 16);
-    for(let k=0;k<e.maxHp;k++){
-      const px = e.x + (k - (e.maxHp-1)/2)*11;
-      g.fillStyle = k < e.hp ? '#a8463a' : 'rgba(255,255,255,.55)'; g.strokeStyle = T.ink; g.lineWidth = 1.3;
-      g.beginPath(); g.moveTo(px,py-5); g.lineTo(px+4.5,py); g.lineTo(px,py+5); g.lineTo(px-4.5,py); g.closePath(); g.fill(); g.stroke();
+  const isBoss = kind === 'boss' && e.words;
+  if((e.maxHp > 1 || isBoss) && e.state === 'walk'){
+    const py = GROUND - 34*s - (target ? 30 : 16), n = isBoss ? BOSS_WORDS : e.maxHp;
+    for(let k=0;k<n;k++){
+      const px = e.x + (k - (n-1)/2)*(isBoss ? 18 : 11), d = isBoss ? 1.5 : 1;
+      g.fillStyle = isBoss ? (k < e.charge ? '#e0aa3e' : 'rgba(255,255,255,.55)') : (k < e.hp ? '#a8463a' : 'rgba(255,255,255,.55)'); g.strokeStyle = T.ink; g.lineWidth = 1.3;
+      g.beginPath(); g.moveTo(px,py-5*d); g.lineTo(px+4.5*d,py); g.lineTo(px,py+5*d); g.lineTo(px-4.5*d,py); g.closePath(); g.fill(); g.stroke();
     }
   }
   if(e.stun > 0){
@@ -991,8 +993,9 @@ function paintKind(cv, kind){
   drawEnemy(g, { x:0, kind, hp:K.hp, maxHp:K.hp, state:'show', t:1.3, stun:0, flash:0, scale:(K.scale[0]+K.scale[1])/2,
                  horn: kind === 'boss' ? 0 : kind === 'runner' ? 1 : 0, color: kind === 'runner' ? '#3f7a6a' : kind === 'boss' ? '#4a2f45' : T.enemy[0] }, T, false);
 }
-function drawArrow(g,x,y,ang,T){
+function drawArrow(g,x,y,ang,T,big){
   g.save(); g.translate(x,y); g.rotate(ang);
+  if(big){ g.scale(2.8,2.8); g.shadowColor = '#f2c45a'; g.shadowBlur = 18; g.fillStyle = 'rgba(242,196,90,.35)'; g.beginPath(); g.moveTo(9,0); g.lineTo(-40,-5); g.lineTo(-40,5); g.closePath(); g.fill(); }
   g.strokeStyle = '#5b4026'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(-15,0); g.lineTo(5,0); g.stroke();
   g.fillStyle = T.ink; g.beginPath(); g.moveTo(9,0); g.lineTo(3,-3); g.lineTo(3,3); g.closePath(); g.fill();
   g.fillStyle = '#e9e1cc'; g.beginPath(); g.moveTo(-15,0); g.lineTo(-19,-3.5); g.lineTo(-12,0); g.lineTo(-19,3.5); g.closePath(); g.fill();
@@ -1057,7 +1060,13 @@ function startGame(cfg){
   stopGame();
   const T = THEMES[cfg.theme];
   cfg = Object.assign({}, cfg, { speed: cfg.speed * PATH_K });
-  G = { cfg, T, bg:makeBg(cfg.theme), pool:cfg.pool, queue:(ws => { const ks = planKinds(ws.length, cfg.tier || 0, cfg.boss); return ws.map((w,i) => ({ w, kind:ks[i] })); })(shuffle(cfg.words)), total:cfg.words.length,
+  G = { cfg, T, bg:makeBg(cfg.theme), pool:cfg.pool, queue:(ws => {
+          const withBoss = ws.length >= BOSS_WORDS + 3, n = withBoss ? ws.length - BOSS_WORDS : ws.length;
+          const ks = planKinds(n, cfg.tier || 0, false);
+          const q = ws.slice(0, n).map((w,i) => ({ w, kind:ks[i] }));
+          if(withBoss) q.push({ kind:'boss', words:ws.slice(n) });
+          return q; })(shuffle(cfg.words)),
+        total:cfg.words.length >= BOSS_WORDS + 3 ? cfg.words.length - BOSS_WORDS + 1 : cfg.words.length,
         enemies:[], arrows:[], stuck:[], parts:[], cracks:[], boulder:null, banner:null,
         hp:MAX_HP, right:0, killed:0, breached:0, streak:0, missed:new Set(),
         time:0, spawnT:1.2, slowUntil:0, lock:0, cur:null, panel:'', pull:0, shake:0, paused:false, over:false, dead:false, last:0 };
@@ -1101,12 +1110,13 @@ function hud(){
 }
 
 function spawn(){
-  const { w, kind } = G.queue.shift(), K = KINDS[kind];
+  const item = G.queue.shift(), kind = item.kind, K = KINDS[kind];
+  const words = item.words || null, w = words ? words[0] : item.w;
   const color = kind === 'runner' ? ['#3f7a6a','#4f6f86'][Math.floor(Math.random()*2)] : kind === 'boss' ? '#4a2f45' : G.T.enemy[Math.floor(Math.random()*G.T.enemy.length)];
-  G.enemies.push({ w, kind, hp:K.hp, maxHp:K.hp, spd:K.spd, dmg:K.dmg, x:W + (kind === 'boss' ? 44 : 24), state:'walk', t:Math.random()*3, dt:0, stun:0, flash:0, doomed:false, lastType:null,
+  G.enemies.push({ w, kind, hp:K.hp, maxHp:K.hp, spd:K.spd, dmg:K.dmg, x:kind === 'boss' ? W - 40 : W + 24, words, charge:0, state:'walk', t:Math.random()*3, dt:0, stun:0, flash:0, doomed:false, lastType:null,
                    scale:K.scale[0] + Math.random()*(K.scale[1]-K.scale[0]), horn: kind === 'boss' ? 0 : kind === 'runner' ? 1 : Math.floor(Math.random()*3), color });
   if(kind !== 'grunt' && !S.seen[kind]){ S.seen[kind] = true; save(); G.banner = { text:`新敵人：${K.name}　${K.short}`, t:2.8 }; sfx(kind === 'boss' ? 'boss' : 'newEnemy'); }
-  else if(kind === 'boss'){ G.banner = { text:`魔王登場　${K.short}`, t:2.4 }; sfx('boss'); }
+  else if(kind === 'boss'){ G.banner = { text:`魔王登場　${K.short}`, t:2.6 }; sfx('boss'); }
   hud();
 }
 function ink(x,y,col,n=14,spd=120){
@@ -1124,7 +1134,8 @@ function update(dt){
   const slow = G.time < G.slowUntil ? .35 : 1;
   G.spawnT -= dt;
   const walkers = G.enemies.filter(e => e.state === 'walk');
-  if(G.queue.length && walkers.length < 4 && (G.spawnT <= 0 || walkers.length === 0)){ spawn(); G.spawnT = G.cfg.every; }
+  const nextBoss = G.queue.length && G.queue[0].kind === 'boss';
+  if(G.queue.length && (nextBoss ? walkers.length === 0 && !G.arrows.length : walkers.length < 4 && (G.spawnT <= 0 || walkers.length === 0))){ spawn(); G.spawnT = G.cfg.every; }
   for(const e of G.enemies){
     e.t += dt; if(e.flash > 0) e.flash -= dt;
     if(e.state === 'walk'){
@@ -1134,7 +1145,7 @@ function update(dt){
       e.dt += dt;
       if(e.dt > .45 && !e.hitDone){
         e.hitDone = true; G.hp = Math.max(0, G.hp - e.dmg); G.breached++; G.shake = .4 + .2*(e.dmg-1); for(let c=0;c<e.dmg;c++) addCrack(); sfx('wall');
-        G.missed.add(e.w.w); S.wrong[e.w.w] = (S.wrong[e.w.w] || 0) + 1; save();
+        (e.words ? e.words.slice(e.charge) : [e.w]).forEach(x => { G.missed.add(x.w); S.wrong[x.w] = (S.wrong[x.w] || 0) + 1; }); save();
         ink(STOP_X-6, GROUND-14, '#8a8f8c', 10, 90); hud();
       }
       if(e.dt > .95){ e.state = 'gone'; ink(e.x, GROUND-10, 'rgba(60,60,60,.6)', 8, 60); hud(); }
@@ -1146,7 +1157,8 @@ function update(dt){
       a.done = true;
       if(a.hit && a.e.state !== 'gone'){
         const e = a.e; e.hp--; e.flash = .15;
-        if(e.hp <= 0){ sfx('kill'); e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100); }
+        if(e.hp <= 0){ sfx('kill'); e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100);
+          if(e.kind === 'boss'){ ink(e.x, GROUND-24*e.scale, '#e0aa3e', 36, 220); G.shake = .45; G.banner = { text:'打倒魔王', t:1.6 }; } }
         else {
           e.doomed = false; e.x = Math.min(W-10, e.x + 18);
           sfx(e.kind === 'shield' && e.hp === 1 ? 'shield' : 'hit');
@@ -1172,6 +1184,7 @@ function update(dt){
   G.parts = G.parts.filter(p => p.life > 0);
   if(G.shake > 0) G.shake -= dt;
   if(G.pull > 0) G.pull -= dt*3;
+  if(G.chargeFx > 0) G.chargeFx -= dt*2.5;
   if(G.banner){ G.banner.t -= dt; if(G.banner.t <= 0) G.banner = null; }
   if(!G.over){
     if(G.hp <= 0) finish(false);
@@ -1190,6 +1203,12 @@ function draw(){
   G.cracks.forEach(c => { g.beginPath(); c.forEach(([x,y],i) => i ? g.lineTo(x,y) : g.moveTo(x,y)); g.stroke(); });
   drawFlag(g,T,G.time);
   drawArcher(g,T,Math.max(0,G.pull));
+  const bossE = G.enemies.find(z => z.kind === 'boss' && z.words && z.state === 'walk');
+  if(bossE && bossE.charge > 0){
+    const r = 4 + bossE.charge*3 + Math.sin(G.time*8)*1.2 + (G.chargeFx > 0 ? G.chargeFx*6 : 0);
+    const gl = g.createRadialGradient(150,95,1,150,95,r*2.4); gl.addColorStop(0,'rgba(255,236,170,.95)'); gl.addColorStop(.45,'rgba(242,196,90,.6)'); gl.addColorStop(1,'rgba(242,196,90,0)');
+    g.fillStyle = gl; circle(g,150,95,r*2.4); g.fill();
+  }
   G.stuck.forEach(s => { g.globalAlpha = Math.min(1, s.life); drawArrow(g,s.x,s.y,s.ang,T); g.globalAlpha = 1; });
   const tgt = G.cur && G.cur.enemy;
   [...G.enemies].sort((a,b) => b.x - a.x).forEach(e => drawEnemy(g,e,T,e === tgt && e.state === 'walk'));
@@ -1198,7 +1217,7 @@ function draw(){
     const pos = q => [a.x0 + (a.x1-a.x0)*q, a.y0 + (a.y1-a.y0)*q - arc*Math.sin(Math.PI*q)];
     const [x,y] = pos(p), [x2,y2] = pos(Math.min(1,p+.02)), [x0,y0] = pos(Math.max(0,p-.02));
     a.endAng = Math.atan2(y2-y0, x2-x0);
-    drawArrow(g,x,y,a.endAng,T);
+    drawArrow(g,x,y,a.endAng,T,a.big);
   }
   if(G.boulder){
     const b = G.boulder, p = Math.min(1, b.t/b.dur);
@@ -1291,14 +1310,28 @@ function answer(j){
   const fb = document.getElementById('fb');
   G.pull = 1;
   if(ok){
-    e.doomed = true;
     const lead = e.stun > 0 ? 0 : G.cfg.speed*e.spd*.45;
-    const left = e.hp - 1;
-    G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 14*e.scale, t:0, dur:.45, arc:34, hit:true, e });
-    G.right++; G.streak++; sfx('shoot');
+    let left = e.hp - 1, more = '';
+    if(e.kind === 'boss'){
+      e.charge++; left = BOSS_WORDS - e.charge;
+      G.right++; G.streak++;
+      if(left > 0){                                 // 還沒蓄滿：不射箭，換魔王身上的下一個字
+        e.w = e.words[e.charge]; e.flash = .12; G.chargeFx = 1; sfx('combo');
+        more = `<br><span class="good">蓄力 ${e.charge}／${BOSS_WORDS}，再答對 ${left} 題就能發動攻擊</span>`;
+      }else{                                        // 蓄滿：射出金色巨箭
+        e.doomed = true; G.chargeFx = 1;
+        G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 18*e.scale, t:0, dur:.55, arc:40, hit:true, big:true, e });
+        sfx('shoot'); sfx('boulder');
+        more = `<br><span class="good">蓄力完成，發動攻擊</span>`;
+      }
+    }else{
+      e.doomed = true;
+      G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 14*e.scale, t:0, dur:.45, arc:34, hit:true, e });
+      G.right++; G.streak++; sfx('shoot');
+      if(left > 0) more = e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對 1 次</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
+    }
     if(S.wrong[x.w]){ S.wrong[x.w]--; if(S.wrong[x.w] <= 0) delete S.wrong[x.w]; }
-    const more = left <= 0 ? '' : e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對 1 次</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
-    fb.innerHTML = `<span class="good">命中</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
+    fb.innerHTML = `<span class="good">${e.kind === 'boss' && left > 0 ? '答對' : '命中'}</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
     G.lock = G.time + (left > 0 ? 1.1 : .8);
     if(left > 0) G.cur.stale = true;
     if(G.streak % COMBO === 0){
@@ -1540,7 +1573,8 @@ function showHelp(){
       <p>敵人走到城門會敲城牆一下。城牆有 ${MAX_HP} 點耐久，全部用完就失敗。守住時城牆完好拿 3 顆星，剩 3～4 點拿 2 顆星，剩 1～2 點拿 1 顆星。</p>
       <p>首頁上方可以切換兩個單字區。<b>每週講義</b>：每個主題的 20 個字分成兩關，每週最後的小考模擬會從整週的字隨機抽 ${QUIZ.n} 個，適合小考前練習。<b>高頻單字</b>：Unit 1～${HF.units.length}，每個 Unit 分成三關，最後的綜合挑戰會從全部高頻單字隨機抽 ${QUIZ.n} 個。</p>
       <p>題型有三種：看英文選中文、看中文選英文、例句填空。用電腦玩可以按鍵盤 1～4 作答。</p>
-      <p>每一關標有難度：<span class="tag t0">入門</span>只有墨角兵，<span class="tag t1">進階</span>加入疾行鬼，<span class="tag t2">挑戰</span>再加入盾甲兵，<span class="tag t3">魔王</span>是小考模擬和綜合挑戰，最後會有魔王。要答對好幾次的敵人，頭上會顯示紅色菱形，答對一次少一顆。</p>
+      <p>每一關標有難度：<span class="tag t0">入門</span>只有墨角兵，<span class="tag t1">進階</span>加入疾行鬼，<span class="tag t2">挑戰</span>再加入盾甲兵，<span class="tag t3">綜合</span>是小考模擬和綜合挑戰，三種怪物都會出現。要答對好幾次的敵人，頭上會顯示紅色菱形，答對一次少一顆。</p>
+      <p><b>每一關的最後三題是魔王關</b>：魔王身上帶著 3 個單字，頭上有 3 個金色格子。每答對 1 題，弓箭手就蓄力一格；3 題都答對，才能射出金色巨箭打倒魔王。魔王走得很慢，但衝到城下會扣 2 點耐久。</p>
     </div>
     <h3 class="lead" style="font-family:var(--display);font-weight:900;color:var(--onDark);font-size:18px;letter-spacing:.08em;margin:6px 0 10px">怪物圖鑑</h3>
     <div class="bestiary">${Object.entries(KINDS).map(([k,K]) => `<div class="beast"><canvas data-kind="${k}" aria-hidden="true"></canvas><div><b>${K.name}</b><p>${K.desc}</p></div></div>`).join('')}</div>
