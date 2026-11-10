@@ -41,6 +41,7 @@ body{background:var(--page);color:var(--onDark);font-family:var(--body);font-siz
 button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 button:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 .latin{font-family:var(--latin)}
+.kw{font-weight:700;color:var(--ink)}
 .ipa{font-family:"Charis SIL","Doulos SIL","Lucida Sans Unicode","Arial Unicode MS",sans-serif;font-size:.85em;color:var(--muted);font-weight:400}
 
 /* 標題 */
@@ -400,7 +401,7 @@ const HF = { id:'hf', name:'高頻單字', lexile:'250L–600L', units:[
       {w:"observe", ipa:"əbˈzɝv", pos:"v.", zh:"觀察；遵守", ex:"Scientists observe animals to learn about their behavior.", exZh:"科學家觀察動物以了解牠們的行為。"},
       {w:"ancient", ipa:"ˈenʃənt", pos:"adj.", zh:"古代的", ex:"We learned about ancient cities in history class today.", exZh:"我們今天在歷史課上學到古代的城市。"},
       {w:"vision", ipa:"ˈvɪʒən", pos:"n.", zh:"視力", ex:"Kevin’s vision got better after he got new glasses.", exZh:"Kevin戴上新眼鏡後視力變好了。"},
-      {w:"track", ipa:"træk", pos:"v./n.", zh:"追蹤；；軌道", ex:"The police can track the thief by using cameras.", exZh:"警方可以用攝影機追蹤小偷。"},
+      {w:"track", ipa:"træk", pos:"v./n.", zh:"追蹤；軌道", ex:"The police can track the thief by using cameras.", exZh:"警方可以用攝影機追蹤小偷。"},
       {w:"panic", ipa:"ˈpænɪk", pos:"v.", zh:"驚慌", ex:"Don’t panic; everything will be fine.", exZh:"別驚慌；一切都會好起來的。"},
       {w:"squeeze", ipa:"skwiz", pos:"v.", zh:"擠；擰", ex:"She squeezed the orange to make fresh juice.", exZh:"她擠了柳橙來做新鮮果汁。"},
       {w:"continue", ipa:"kənˈtɪnju", pos:"v.", zh:"繼續", ex:"After a short break, we continued our homework.", exZh:"休息一下後，我們繼續做作業。"},
@@ -493,8 +494,8 @@ const HF = { id:'hf', name:'高頻單字', lexile:'250L–600L', units:[
     ]}
 ]};
 const PART = 10;                                  // 每關最多幾隻敵人（主題會平均切成好幾關）
-const SPEED = 36, EVERY = 6.5;                    // 一般關卡：敵人速度、幾秒出一隻
-const QUIZ = { n:20, speed:42, every:5.5 };       // 小考模擬：從整週隨機抽 n 個字
+const SPEED = 26, EVERY = 8.5;                    // 一般關卡：敵人速度、幾秒出一隻
+const QUIZ = { n:20, speed:30, every:7.5 };       // 小考模擬：從整週隨機抽 n 個字
 const MAX_HP = 5;          // 城牆耐久
 const COMBO = 3;           // 連續答對幾題觸發投石
 const SAVE_KEY = 'lexile_keep_w_v1';
@@ -503,7 +504,7 @@ const SAVE_KEY = 'lexile_keep_w_v1';
    tier（難度）0 入門：只有墨角兵；1 進階：加入疾行鬼；2 挑戰：再加入盾甲兵；3 小考／綜合：混合＋最後一隻魔王。 */
 const KINDS = {
   grunt: { name:'墨角兵', short:'',            hp:1, spd:1,    dmg:1, scale:[.9,1.12],   desc:'最常見的敵人，一般速度，答對 1 次就擊退。' },
-  runner:{ name:'疾行鬼', short:'走得特別快',   hp:1, spd:1.55, dmg:1, scale:[.76,.84],   desc:'圍著圍巾、身體前傾，走得比別人快一半，要快點作答。' },
+  runner:{ name:'疾行鬼', short:'走得特別快',   hp:1, spd:1.4, dmg:1, scale:[.76,.84],   desc:'圍著圍巾、身體前傾，走得比別人快，要快點作答。' },
   shield:{ name:'盾甲兵', short:'要答對 2 次',  hp:2, spd:.78,  dmg:1, scale:[1.08,1.16], desc:'戴頭盔、拿木盾，走得慢。第一箭打碎盾牌，再答對一次才會擊退。' },
   boss:  { name:'魔王',   short:'要答對 3 次',  hp:3, spd:.6,   dmg:2, scale:[1.62,1.62], desc:'小考模擬和綜合挑戰的最後一隻。要答對 3 次，衝到城下會扣 2 點耐久。' },
 };
@@ -1010,8 +1011,26 @@ function paintStill(cv, theme, opts={}){
 }
 
 /* ---------- 出題 ---------- */
-const TYPES = ['en2zh','zh2en','listen','fill'];
+const TYPES = ['en2zh','zh2en','fill'];
 const TYPE_LABEL = { en2zh:'看英文，選中文', zh2en:'看中文，選英文', listen:'聽發音，選單字', fill:'例句填空' };
+// 例句中譯換句話說、自動比對不到時，用這張表指定要標粗體的中文
+const KW = { crawl:['爬過'], hide:['躲在'], lay:['產下'], wild:['失控'], spot:['發現'], battle:['戰役'], behave:['守規矩'], crowd:['人群'], confused:['搞混'], delight:['高興'], stick:['伸進'], whisper:['低聲說','輕聲說','輕聲'], support:['支撐'], wise:['明智'], accept:['錄取'], arrange:['整理'], confident:['深信'], destroy:['摧毀'], disturb:['驚擾'], divide:['分給','分一下'], emotion:['情感'], greedy:['貪吃'], strike:['擊中'], chase:['追著'], create:['製作'], improve:['提升'], recognize:['認出'], unusual:['很少見'], bold:['勇敢地'], frightened:['害怕'], generous:['樂於'], wonderful:['愉快'], merry:['開心'], lead:['帶領'], male:['雄'], steady:['穩'], lift:['抬起'], manage:['設法'], messy:['很亂'], eager:['迫不及待'], assist:['幫','協助'], tease:['取笑'], spread:['傳開'], replace:['換成'], blind:['看不見'], deliver:['送到'], surface:['湖面'], grab:['抓起'], locate:['找到'], rescue:['救起來'], inspire:['激勵'], cover:['遮住'], survive:['活下去'], remove:['脫'], force:['只能'], freeze:['結冰'], signal:['信號'], blossom:['開'], communicate:['聯絡'], recall:['記得'], slippery:['很滑'], vivid:['生動'], attach:['附在'], separate:['分類'], gather:['收成'], rush:['匆忙'], yell:['大聲喊叫'], fair:['科學展'], feed:['餵'], struggle:['吃力'], represent:['象徵'], treasure:['寶物'], invisible:['看不見'], dread:['恐懼'], release:['推出'], area:['地區'], march:['行進'], soak:['泡'], peaceful:['寧靜'], swift:['迅速'], please:['取悅'], carve:['刻'], nest:['巢'], sneaky:['偷偷'], transfer:['轉乘'], wrap:['包好'], raise:['調高'], ignore:['忽視'], amazing:['令人驚嘆'], field:['棒球場'], huge:['巨型'], glance:['看了一眼'], hardly:['幾乎沒有'], loose:['鬆了'], 'figure out':['想出'], predator:['掠食者'] };
+// 在例句中譯裡找出這個單字對應的中文，標成粗體（找不到就不標）
+function zhMark(x){
+  const z = x.exZh, cands = [...(KW[x.w] || [])];
+  x.zh.split(/[；;、，,]/).forEach(c => {
+    c = c.trim(); if(!c) return;
+    cands.push(c, c.replace(/[的地]$/, ''), c.replace(/^(感到|令人|有)/, '').replace(/[的地]$/, ''));
+  });
+  let best = '';
+  cands.forEach(c => { if(c && z.includes(c) && c.length > best.length) best = c; });
+  if(!best){                                   // 退而求其次：最長的共同片段（至少 2 個字）
+    cands.forEach(c => { for(let i=0;i<c.length;i++) for(let j=c.length;j>=i+2;j--){ const sub = c.slice(i,j); if(sub.length > best.length && z.includes(sub)) best = sub; } });
+  }
+  if(!best) return esc(z);
+  const i = z.indexOf(best);
+  return esc(z.slice(0,i)) + '<b class="kw">' + esc(best) + '</b>' + esc(z.slice(i + best.length));
+}
 const blankRe = x => new RegExp('\\b' + x.w + '\\b');
 const canFill = x => blankRe(x).test(x.ex);
 function makeQuestion(x, pool, avoid){
@@ -1245,7 +1264,7 @@ function renderQ(){
   if(q.type === 'en2zh') p = `<div class="prompt w">${esc(x.w)}</div>${canSpeak ? `<button class="say" data-say="${esc(x.w)}">${IC.speaker}發音</button>` : ''}`;
   else if(q.type === 'zh2en') p = `<div class="prompt zh">${esc(x.zh)}<span class="pos">${esc(x.pos)}</span></div>`;
   else if(q.type === 'listen') p = `<button class="bigsay" data-say="${esc(x.w)}">${IC.speaker}再聽一次</button>`;
-  else { const m = x.ex.match(blankRe(x)); p = `<div class="prompt sent">${esc(x.ex.slice(0,m.index))}<span class="blank"></span>${esc(x.ex.slice(m.index + x.w.length))}</div><div class="trans">${esc(x.exZh)}</div>`; }
+  else { const m = x.ex.match(blankRe(x)); p = `<div class="prompt sent">${esc(x.ex.slice(0,m.index))}<span class="blank"></span>${esc(x.ex.slice(m.index + x.w.length))}</div><div class="trans">${zhMark(x)}</div>`; }
   const latin = q.type !== 'en2zh';
   document.getElementById('qp').innerHTML = `
     <div class="qlabel">${TYPE_LABEL[q.type]}</div>
@@ -1296,7 +1315,7 @@ function answer(j){
     e.x = Math.max(STOP_X, e.x - 24);
     G.streak = 0;
     G.missed.add(x.w); S.wrong[x.w] = (S.wrong[x.w] || 0) + 1;
-    fb.innerHTML = `<span class="bad">射偏了</span>　正確答案是 <b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}<br><span class="trans latin" style="font-size:16px">${esc(x.ex)}</span>`;
+    fb.innerHTML = `<span class="bad">射偏了</span>　正確答案是 <b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}<br><span class="trans latin" style="font-size:16px">${esc(x.ex)}</span><br><span class="trans">${zhMark(x)}</span>`;
     G.lock = G.time + 2.2; G.slowUntil = G.lock;
     G.cur.stale = true;
   }
@@ -1411,7 +1430,7 @@ function wordRow(x, extra=''){
   return `<div class="word">
     <div style="min-width:0">
       <div><span class="en">${esc(x.w)}</span> <span class="ipa">[${esc(x.ipa)}]</span><span class="pos">${esc(x.pos)}</span>　<span class="zh">${esc(x.zh)}</span>${extra}</div>
-      <div class="ex">${esc(x.ex)}</div><div class="exz">${esc(x.exZh)}</div>
+      <div class="ex">${esc(x.ex)}</div><div class="exz">${zhMark(x)}</div>
     </div>
     ${canSpeak ? `<button class="say" data-say="${esc(x.w)}" aria-label="播放 ${esc(x.w)} 的發音">${IC.speaker}</button>` : ''}
   </div>`;
@@ -1480,7 +1499,7 @@ function showWrong(){
   const d = document.getElementById('drill');
   if(d) d.onclick = () => {
     const words = list.slice(0,10).map(([x]) => x);
-    startGame({ title:'錯題特訓', theme:words[0].area, words, pool:allWords, speed:32, every:7.5 });
+    startGame({ title:'錯題特訓', theme:words[0].area, words, pool:allWords, speed:24, every:9 });
   };
   scrollTo(0,0);
 }
@@ -1518,7 +1537,7 @@ function showHelp(){
       <p>連續答對 ${COMBO} 題，投石車會發射石塊，把所有敵人往後擊退並暈眩一下。</p>
       <p>敵人走到城門會敲城牆一下。城牆有 ${MAX_HP} 點耐久，全部用完就失敗。守住時城牆完好拿 3 顆星，剩 3～4 點拿 2 顆星，剩 1～2 點拿 1 顆星。</p>
       <p>首頁上方可以切換兩個單字區。<b>每週講義</b>：每個主題的 20 個字分成兩關，每週最後的小考模擬會從整週的字隨機抽 ${QUIZ.n} 個，適合小考前練習。<b>高頻單字</b>：Unit 1～${HF.units.length}，每個 Unit 分成三關，最後的綜合挑戰會從全部高頻單字隨機抽 ${QUIZ.n} 個。</p>
-      <p>題型有四種：看英文選中文、看中文選英文、聽發音選單字、例句填空。用電腦玩可以按鍵盤 1～4 作答。</p>
+      <p>題型有三種：看英文選中文、看中文選英文、例句填空。用電腦玩可以按鍵盤 1～4 作答。</p>
       <p>每一關標有難度：<span class="tag t0">入門</span>只有墨角兵，<span class="tag t1">進階</span>加入疾行鬼，<span class="tag t2">挑戰</span>再加入盾甲兵，<span class="tag t3">魔王</span>是小考模擬和綜合挑戰，最後會有魔王。要答對好幾次的敵人，頭上會顯示紅色菱形，答對一次少一顆。</p>
     </div>
     <h3 class="lead" style="font-family:var(--display);font-weight:900;color:var(--onDark);font-size:18px;letter-spacing:.08em;margin:6px 0 10px">怪物圖鑑</h3>
