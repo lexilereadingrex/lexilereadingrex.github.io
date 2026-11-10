@@ -566,7 +566,7 @@ function ask(msg, onYes){
   document.getElementById('modalYes').onclick = () => { m.hidden = true; onYes(); };
 }
 
-const canSpeak = 'speechSynthesis' in window;
+const canSpeak = false;   // 老師要求不要發音：發音按鈕、自動唸單字、發音設定都關掉。想恢復就改回 'speechSynthesis' in window
 /* 發音：只挑自然的人聲。蘋果裝置內建很多特效聲音（Bad News、Superstar、Zarvox…），聽起來像吶喊或唱歌，全部排除。 */
 const NOVELTY = /albert|bad ?news|bahh|bells|boing|bubbles|cellos|good ?news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|ralph|kathy|princess|deranged|hysterical|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|bruce|agnes|vicki|victoria/i;
 const PREFERRED = [/samantha/i, /\bava\b/i, /allison/i, /susan/i, /google us english/i, /microsoft (aria|jenny|ana|michelle|guy|christopher|eric).*natural/i,
