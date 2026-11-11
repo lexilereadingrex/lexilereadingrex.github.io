@@ -645,7 +645,34 @@ const SFX = {
   win(){ [523,659,784,1047].forEach((f,i) => tone(f, i === 3 ? .5 : .22, { type:'triangle', vol:.15, delay:i*.12 })); },
   lose(){ [392,330,262,196].forEach((f,i) => tone(f, .34, { type:'triangle', vol:.13, delay:i*.18 })); },
 };
-function sfx(name){ try{ if(audio()) SFX[name](); }catch(e){} }
+// 大招專用音效
+Object.assign(SFX, {
+  charge(level){                                   // 每蓄一格：一格比一格高的叮聲＋閃光聲
+    const base = [523, 659, 784][Math.max(0, Math.min(2, level-1))];
+    tone(base, .18, { type:'triangle', vol:.16 }); tone(base*1.5, .22, { type:'triangle', vol:.1, delay:.07 });
+    tone(base*4, .25, { vol:.05, delay:.12 }); noise(.3, { vol:.05, filter:'highpass', freq:5000, delay:.05 });
+  },
+  ultCharge(){                                     // 集氣：能量往上衝
+    noise(.75, { vol:.16, freq:300, q:2.5, slide:3200, attack:.3 });
+    tone(110, .75, { type:'sawtooth', vol:.07, slide:330, attack:.3 });
+    tone(220, .75, { type:'sawtooth', vol:.05, slide:660, attack:.3 });
+    tone(440, .7, { vol:.06, slide:880, attack:.3 });
+    [0,.08,.16,.24,.32,.4,.48].forEach((d,i) => tone(1568 + i*120, .08, { vol:.035, delay:.25 + d }));
+  },
+  ultLaunch(){                                     // 發射：低沉轟聲＋破風
+    tone(90, .45, { vol:.55, slide:-50 }); tone(45, .5, { vol:.4, slide:-20 });
+    noise(.45, { vol:.24, filter:'highpass', freq:2600, slide:-2000 });
+    noise(.3, { vol:.18, freq:900, q:.7, slide:2000 });
+  },
+  ultImpact(){                                     // 命中：爆炸＋鈸聲＋勝利號角
+    tone(60, 1, { vol:.7, slide:-34 }); tone(120, .5, { type:'square', vol:.08, slide:-80 });
+    noise(.7, { vol:.5, filter:'lowpass', freq:500, slide:-300 });
+    noise(1.6, { vol:.14, filter:'highpass', freq:4000, attack:.01 });
+    [[262,330,392],[330,392,523]].forEach((ch,k) => ch.forEach(f => tone(f, k ? .9 : .3, { type:'sawtooth', vol:.05, delay:.35 + k*.28, attack:.02 })));
+    tone(1047, .9, { type:'triangle', vol:.12, delay:.63 });
+  },
+});
+function sfx(name, ...args){ try{ if(audio()) SFX[name](...args); }catch(e){} }
 
 /* ---------- 圖示（內嵌 SVG） ---------- */
 const IC = {
@@ -1067,7 +1094,7 @@ function startGame(cfg){
           if(withBoss) q.push({ kind:'boss', words:ws.slice(n) });
           return q; })(shuffle(cfg.words)),
         total:cfg.words.length >= BOSS_WORDS + 3 ? cfg.words.length - BOSS_WORDS + 1 : cfg.words.length,
-        enemies:[], arrows:[], stuck:[], parts:[], cracks:[], boulder:null, banner:null,
+        enemies:[], arrows:[], stuck:[], parts:[], cracks:[], waves:[], boulder:null, banner:null, ult:null, flash:0, freezeUntil:0, bigWin:false,
         hp:MAX_HP, right:0, killed:0, breached:0, streak:0, missed:new Set(),
         time:0, spawnT:1.2, slowUntil:0, lock:0, cur:null, panel:'', pull:0, shake:0, paused:false, over:false, dead:false, last:0 };
   $app.innerHTML = `
@@ -1123,6 +1150,18 @@ function ink(x,y,col,n=14,spd=120){
   for(let i=0;i<n;i++){ const a = Math.random()*Math.PI*2, v = spd*(.3+Math.random()*.8);
     G.parts.push({ x, y, vx:Math.cos(a)*v, vy:Math.sin(a)*v - 60, life:.6 + Math.random()*.4, max:1, r:1.5 + Math.random()*3, col }); }
 }
+// 大招命中：爆炸、衝擊波、光芒、碎片、彩帶
+function bossBlast(x, y){
+  sfx('ultImpact');
+  G.shake = .95; G.flash = 1; G.ult = { phase:'boom', t:0, x, y };
+  G.waves.push({ x, y, t:0, dur:.6, r:220, w:10 }, { x, y, t:-.12, dur:.75, r:300, w:5 });
+  ink(x, y, '#f2c45a', 40, 260); ink(x, y, '#ffffff', 20, 200); ink(x, y, '#a8463a', 14, 180); ink(x, GROUND, G.T.pathD, 18, 140);
+  const cols = ['#f2c45a','#a8463a','#3f7a6a','#efe9dc','#4f6f86'];
+  for(let k=0;k<70;k++) G.parts.push({ x: 120 + Math.random()*(W-140), y: -10 - Math.random()*80, vx:(Math.random()-.5)*40, vy: 30 + Math.random()*50,
+    life: 1.8 + Math.random()*.8, r: 2 + Math.random()*2, col: cols[k % cols.length], confetti:true, rot: Math.random()*6, vr:(Math.random()-.5)*10, delay: .25 + Math.random()*.5 });
+  G.banner = { text:'打倒魔王', t:2 };
+  G.bigWin = true;
+}
 function addCrack(){
   const pts = []; let x = 60 + Math.random()*90, y = 140 + Math.random()*80;
   pts.push([x,y]); for(let k=0;k<5;k++){ x += (Math.random()-.5)*16; y += 5 + Math.random()*9; pts.push([x,y]); }
@@ -1139,7 +1178,8 @@ function update(dt){
   for(const e of G.enemies){
     e.t += dt; if(e.flash > 0) e.flash -= dt;
     if(e.state === 'walk'){
-      if(e.stun > 0) e.stun -= dt;
+      if(G.time < (G.freezeUntil || 0)) { /* 大招演出中，時間暫停 */ }
+      else if(e.stun > 0) e.stun -= dt;
       else { e.x -= G.cfg.speed * e.spd * slow * dt; if(e.x <= STOP_X){ e.x = STOP_X; e.state = 'attack'; e.dt = 0; } }
     }else if(e.state === 'attack'){
       e.dt += dt;
@@ -1151,14 +1191,30 @@ function update(dt){
       if(e.dt > .95){ e.state = 'gone'; ink(e.x, GROUND-10, 'rgba(60,60,60,.6)', 8, 60); hud(); }
     }else if(e.state === 'die'){ e.dt += dt; if(e.dt > .55) e.state = 'gone'; }
   }
+  if(G.ult){
+    const u = G.ult; u.t += dt;
+    if(u.phase === 'charge'){
+      if(Math.random() < .9) for(let k=0;k<3;k++){ const a = Math.random()*Math.PI*2, r = 60 + Math.random()*50;   // 火花被吸進去
+        G.parts.push({ x:150 + Math.cos(a)*r, y:95 + Math.sin(a)*r, vx:-Math.cos(a)*r*2.6, vy:-Math.sin(a)*r*2.6, life:.36, r:1.2 + Math.random()*1.8, col: Math.random()<.5 ? '#fff3c4' : '#f2c45a', nograv:true }); }
+      if(u.t >= .75){
+        const e = u.e;                               // 演出期間魔王停住，直接瞄準牠
+        G.arrows.push({ x0:142, y0:96, x1:e.x, y1:GROUND - 18*e.scale, t:0, dur:.5, arc:36, hit:true, big:true, e });
+        u.phase = 'fly'; G.flash = 1; G.shake = .35; G.pull = 1; sfx('ultLaunch');
+      }
+    }
+  }
   for(const a of G.arrows){
     a.t += dt;
+    if(a.big && !a.done){                             // 巨箭拖尾火花
+      const q = Math.min(1, a.t/a.dur), x = a.x0 + (a.x1-a.x0)*q, y = a.y0 + (a.y1-a.y0)*q - a.arc*Math.sin(Math.PI*q);
+      for(let k=0;k<4;k++) G.parts.push({ x:x + (Math.random()-.5)*6, y:y + (Math.random()-.5)*6, vx:(Math.random()-.5)*60 - 40, vy:(Math.random()-.5)*60, life:.35 + Math.random()*.3, r:1.5 + Math.random()*2.5, col: Math.random()<.4 ? '#ffffff' : Math.random()<.5 ? '#fff3c4' : '#f2c45a', nograv:true });
+    }
     if(a.t >= a.dur && !a.done){
       a.done = true;
       if(a.hit && a.e.state !== 'gone'){
         const e = a.e; e.hp--; e.flash = .15;
         if(e.hp <= 0){ sfx('kill'); e.state = 'die'; e.dt = 0; G.killed++; ink(e.x, GROUND-14*e.scale, e.color, 16 + 10*(e.maxHp-1), 140); ink(e.x, GROUND-14, G.T.ink, 6, 100);
-          if(e.kind === 'boss'){ ink(e.x, GROUND-24*e.scale, '#e0aa3e', 36, 220); G.shake = .45; G.banner = { text:'打倒魔王', t:1.6 }; } }
+          if(e.kind === 'boss'){ bossBlast(e.x, GROUND - 22*e.scale); } }
         else {
           e.doomed = false; e.x = Math.min(W-10, e.x + 18);
           sfx(e.kind === 'shield' && e.hp === 1 ? 'shield' : 'hit');
@@ -1180,7 +1236,17 @@ function update(dt){
       G.boulder = null;
     }
   }
-  for(const p of G.parts){ p.life -= dt; p.vy += 320*dt; p.x += p.vx*dt; p.y += p.vy*dt; if(p.y > GROUND+20){ p.y = GROUND+20; p.vy *= -.3; p.vx *= .6; } }
+  for(const p of G.parts){
+    if(p.delay > 0){ p.delay -= dt; continue; }
+    p.life -= dt;
+    if(p.confetti){ p.vy += 40*dt; p.vx += Math.sin(G.time*3 + p.rot)*30*dt; p.rot += p.vr*dt; }
+    else if(!p.nograv) p.vy += 320*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    if(!p.nograv && !p.confetti && p.y > GROUND+20){ p.y = GROUND+20; p.vy *= -.3; p.vx *= .6; }
+  }
+  G.waves.forEach(w => w.t += dt); G.waves = G.waves.filter(w => w.t < w.dur);
+  if(G.flash > 0) G.flash -= dt*3.5;
+  if(G.ult && G.ult.phase === 'boom'){ G.ult.t += dt; if(G.ult.t > .7) G.ult = null; }
   G.parts = G.parts.filter(p => p.life > 0);
   if(G.shake > 0) G.shake -= dt;
   if(G.pull > 0) G.pull -= dt*3;
@@ -1204,8 +1270,19 @@ function draw(){
   drawFlag(g,T,G.time);
   drawArcher(g,T,Math.max(0,G.pull));
   const bossE = G.enemies.find(z => z.kind === 'boss' && z.words && z.state === 'walk');
+  // 集氣：畫面變暗、光環往弓箭手收縮
+  if(G.ult && G.ult.phase === 'charge'){
+    const u = G.ult, p = Math.min(1, u.t/.75);
+    g.fillStyle = `rgba(10,14,22,${.58*p})`; g.fillRect(-20,-20,W+40,H+40);
+    for(let k=0;k<3;k++){ const q = (u.t*1.8 + k/3) % 1, r = (1-q)*90 + 6;
+      g.strokeStyle = `rgba(242,196,90,${.85*q})`; g.lineWidth = 2 + 3*q; circle(g,150,95,r); g.stroke(); }
+    const rays = 10;
+    for(let k=0;k<rays;k++){ const a = k/rays*Math.PI*2 + u.t*2.5, len = 30 + 40*p;
+      g.strokeStyle = `rgba(255,243,196,${.35*p})`; g.lineWidth = 2; g.beginPath(); g.moveTo(150 + Math.cos(a)*10, 95 + Math.sin(a)*10); g.lineTo(150 + Math.cos(a)*len, 95 + Math.sin(a)*len); g.stroke(); }
+    drawArcher(g,T,Math.max(0,G.pull));
+  }
   if(bossE && bossE.charge > 0){
-    const r = 4 + bossE.charge*3 + Math.sin(G.time*8)*1.2 + (G.chargeFx > 0 ? G.chargeFx*6 : 0);
+    const r = 4 + bossE.charge*3 + Math.sin(G.time*8)*1.2 + (G.chargeFx > 0 ? G.chargeFx*6 : 0) + (G.ult && G.ult.phase === 'charge' ? G.ult.t*14 : 0);
     const gl = g.createRadialGradient(150,95,1,150,95,r*2.4); gl.addColorStop(0,'rgba(255,236,170,.95)'); gl.addColorStop(.45,'rgba(242,196,90,.6)'); gl.addColorStop(1,'rgba(242,196,90,0)');
     g.fillStyle = gl; circle(g,150,95,r*2.4); g.fill();
   }
@@ -1227,9 +1304,28 @@ function draw(){
     g.lineWidth = 1; g.beginPath(); g.moveTo(-4,-2); g.lineTo(1,1); g.lineTo(4,-3); g.stroke();
     g.restore();
   }
-  for(const p of G.parts){ g.globalAlpha = Math.max(0, Math.min(1, p.life/.4)); g.fillStyle = p.col; circle(g,p.x,p.y,p.r); g.fill(); }
+  // 爆炸光芒與衝擊波
+  if(G.ult && G.ult.phase === 'boom'){
+    const u = G.ult, p = u.t/.7;
+    g.save(); g.translate(u.x,u.y); g.rotate(u.t*1.2);
+    for(let k=0;k<14;k++){ const a = k/14*Math.PI*2, len = 80 + 180*p;
+      g.fillStyle = `rgba(255,236,170,${.55*(1-p)})`; g.beginPath(); g.moveTo(0,0);
+      g.lineTo(Math.cos(a-.07)*len, Math.sin(a-.07)*len); g.lineTo(Math.cos(a+.07)*len, Math.sin(a+.07)*len); g.closePath(); g.fill(); }
+    g.restore();
+    const core = g.createRadialGradient(u.x,u.y,2,u.x,u.y,70*(1-p*.5)); core.addColorStop(0,`rgba(255,255,255,${1-p})`); core.addColorStop(.4,`rgba(255,226,140,${.8*(1-p)})`); core.addColorStop(1,'rgba(242,196,90,0)');
+    g.fillStyle = core; circle(g,u.x,u.y,70); g.fill();
+  }
+  G.waves.forEach(w => { if(w.t < 0) return; const p = w.t/w.dur;
+    g.strokeStyle = `rgba(255,226,140,${1-p})`; g.lineWidth = w.w*(1-p) + 1; ell(g, w.x, w.y, w.r*p, w.r*p*.55); g.stroke(); });
+  for(const p of G.parts){
+    if(p.delay > 0) continue;
+    g.globalAlpha = Math.max(0, Math.min(1, p.life/.4)); g.fillStyle = p.col;
+    if(p.confetti){ g.save(); g.translate(p.x,p.y); g.rotate(p.rot); g.fillRect(-p.r, -p.r*.5, p.r*2, p.r); g.restore(); }
+    else { circle(g,p.x,p.y,p.r); g.fill(); }
+  }
   g.globalAlpha = 1;
   g.restore();
+  if(G.flash > 0){ g.fillStyle = `rgba(255,250,230,${Math.min(.75, G.flash*.75)})`; g.fillRect(0,0,W,H); }
   if(G.banner){
     const a = Math.min(1, G.banner.t/.3);
     g.globalAlpha = a;
@@ -1316,12 +1412,16 @@ function answer(j){
       e.charge++; left = BOSS_WORDS - e.charge;
       G.right++; G.streak++;
       if(left > 0){                                 // 還沒蓄滿：不射箭，換魔王身上的下一個字
-        e.w = e.words[e.charge]; e.flash = .12; G.chargeFx = 1; sfx('combo');
+        e.w = e.words[e.charge]; e.flash = .12; G.chargeFx = 1; sfx('charge', e.charge);
+        for(let k=0;k<14;k++){ const a = Math.random()*Math.PI*2, r = 40 + Math.random()*30;   // 金色光點往弓箭手聚集
+          G.parts.push({ x:150 + Math.cos(a)*r, y:95 + Math.sin(a)*r, vx:-Math.cos(a)*r*2.2, vy:-Math.sin(a)*r*2.2, life:.45, r:1.5 + Math.random()*1.5, col:'#f2c45a', nograv:true }); }
         more = `<br><span class="good">蓄力 ${e.charge}／${BOSS_WORDS}，再答對 ${left} 題就能發動攻擊</span>`;
       }else{                                        // 蓄滿：射出金色巨箭
         e.doomed = true; G.chargeFx = 1;
-        G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 18*e.scale, t:0, dur:.55, arc:40, hit:true, big:true, e });
-        sfx('shoot'); sfx('boulder');
+        G.ult = { phase:'charge', t:0, e };           // 集氣 0.75 秒後才發射（見 update）
+        G.freezeUntil = G.time + 1.4;                  // 演出期間敵人停住
+        G.banner = { text:'蓄力完成　必殺一擊', t:1.2 };
+        sfx('ultCharge');
         more = `<br><span class="good">蓄力完成，發動攻擊</span>`;
       }
     }else{
@@ -1332,9 +1432,9 @@ function answer(j){
     }
     if(S.wrong[x.w]){ S.wrong[x.w]--; if(S.wrong[x.w] <= 0) delete S.wrong[x.w]; }
     fb.innerHTML = `<span class="good">${e.kind === 'boss' && left > 0 ? '答對' : '命中'}</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
-    G.lock = G.time + (left > 0 ? 1.1 : .8);
+    G.lock = G.time + (left > 0 ? 1.1 : e.kind === 'boss' ? 1.6 : .8);
     if(left > 0) G.cur.stale = true;
-    if(G.streak % COMBO === 0){
+    if(G.streak % COMBO === 0 && !(e.kind === 'boss' && left <= 0)){   // 大招時不觸發連擊，免得蓋掉大招字幕
       const ws = G.enemies.filter(z => z.state === 'walk' && z !== e);
       if(ws.length){
         const mid = ws.reduce((s,z) => s + z.x, 0) / ws.length;
@@ -1358,9 +1458,9 @@ function answer(j){
 
 function finish(won){
   sfx(won ? 'win' : 'lose');
-  G.over = true; G.won = won; G.endIn = 1.3; G.cur = null;
+  G.over = true; G.won = won; G.endIn = G.bigWin && won ? 2.6 : 1.3; G.cur = null;
   if(!won) G.banner = { text:'城門被攻破了', t:1.3 };
-  else G.banner = { text:'守城成功', t:1.3 };
+  else G.banner = G.bigWin ? { text:'打倒魔王　守城成功', t:2.6 } : { text:'守城成功', t:1.3 };
 }
 
 /* ---------- 畫面：地圖 ---------- */
