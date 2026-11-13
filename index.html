@@ -573,7 +573,7 @@ const SAVE_KEY = 'lexile_keep_w_v1';
 const KINDS = {
   grunt: { name:'墨角兵', short:'',            hp:1, spd:1,    dmg:1, scale:[.9,1.12],   desc:'最常見的敵人，一般速度，答對 1 次就擊退。' },
   runner:{ name:'疾行鬼', short:'走得特別快',   hp:1, spd:1.4, dmg:1, scale:[.76,.84],   desc:'圍著圍巾、身體前傾，走得比別人快，要快點作答。' },
-  shield:{ name:'盾甲兵', short:'要答對 2 次',  hp:2, spd:.78,  dmg:1, scale:[1.08,1.16], desc:'戴頭盔、拿木盾，走得慢。第一箭打碎盾牌，再答對一次才會擊退。' },
+  shield:{ name:'盾甲兵', short:'要答對 2 個字', hp:2, spd:.78,  dmg:1, scale:[1.08,1.16], desc:'戴頭盔、拿木盾，走得慢，身上帶著 2 個不同的單字。答對第 1 個字打碎盾牌，再答對第 2 個字才會擊退。' },
   boss:  { name:'魔王',   short:'答對 3 題才能攻擊', hp:1, spd:.5, dmg:2, scale:[1.62,1.62], desc:'每一關的最後三題由魔王登場，牠身上帶著 3 個單字。答對 1 題，弓箭手就蓄力一格，3 題全對蓄滿力量，才能射出金色巨箭打倒牠。衝到城下會扣 2 點耐久。' },
 };
 const TIER_NAME = ['入門','進階','挑戰','綜合'];
@@ -1157,14 +1157,18 @@ function startGame(cfg){
   cfg = Object.assign({}, cfg, { speed: cfg.speed * PATH_K });
   G = { cfg, T, bg:makeBg(cfg.theme), pool:cfg.pool, queue:(ws => {
           const withBoss = ws.length >= BOSS_WORDS + 3, n = withBoss ? ws.length - BOSS_WORDS : ws.length;
-          const ks = planKinds(n, cfg.tier || 0, false);
-          const q = ws.slice(0, n).map((w,i) => ({ w, kind:ks[i] }));
+          const ks = planKinds(n, cfg.tier || 0, false), q = [];
+          for(let i=0; i<n; i++){
+            if(ks[i] === 'shield' && i+1 < n){ q.push({ kind:'shield', words:[ws[i], ws[i+1]] }); i++; }   // 盾甲兵帶 2 個不同的字
+            else q.push({ w:ws[i], kind: ks[i] === 'shield' ? 'grunt' : ks[i] });
+          }
           if(withBoss) q.push({ kind:'boss', words:ws.slice(n) });
           return q; })(shuffle(cfg.words)),
-        total:cfg.words.length >= BOSS_WORDS + 3 ? cfg.words.length - BOSS_WORDS + 1 : cfg.words.length,
+        total:0,
         enemies:[], arrows:[], stuck:[], parts:[], cracks:[], waves:[], boulder:null, banner:null, ult:null, flash:0, freezeUntil:0, bigWin:false,
         hp:MAX_HP, right:0, killed:0, breached:0, streak:0, missed:new Set(),
         time:0, spawnT:1.2, slowUntil:0, lock:0, cur:null, panel:'', pull:0, shake:0, paused:false, over:false, dead:false, last:0 };
+  G.total = G.queue.length;
   $app.innerHTML = `
     <div class="topbar">
       <button class="tbtn" id="back">${IC.back}撤退</button>
@@ -1253,7 +1257,7 @@ function update(dt){
       e.dt += dt;
       if(e.dt > .45 && !e.hitDone){
         e.hitDone = true; G.hp = Math.max(0, G.hp - e.dmg); G.breached++; G.shake = .4 + .2*(e.dmg-1); for(let c=0;c<e.dmg;c++) addCrack(); sfx('wall');
-        (e.words ? e.words.slice(e.charge) : [e.w]).forEach(x => { G.missed.add(x.w); S.wrong[x.w] = (S.wrong[x.w] || 0) + 1; }); save();
+        (e.words ? e.words.slice(e.kind === 'boss' ? e.charge : (e.idx || 0)) : [e.w]).forEach(x => { G.missed.add(x.w); S.wrong[x.w] = (S.wrong[x.w] || 0) + 1; }); save();
         ink(STOP_X-6, GROUND-14, '#8a8f8c', 10, 90); hud();
       }
       if(e.dt > .95){ e.state = 'gone'; ink(e.x, GROUND-10, 'rgba(60,60,60,.6)', 8, 60); hud(); }
@@ -1496,7 +1500,8 @@ function answer(j){
       e.doomed = true;
       G.arrows.push({ x0:142, y0:96, x1:e.x - lead, y1:GROUND - 14*e.scale, t:0, dur:.45, arc:34, hit:true, e });
       G.right++; G.streak++; sfx('shoot');
-      if(left > 0) more = e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對 1 次</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
+      if(e.words){ e.idx = (e.idx || 0) + 1; if(e.idx < e.words.length) e.w = e.words[e.idx]; }   // 換身上的下一個字
+      if(left > 0) more = e.kind === 'shield' ? '<br><span class="good">盾牌碎了，再答對下一個字就能擊退</span>' : `<br><span class="good">${KINDS[e.kind].name}還要再答對 ${left} 次</span>`;
     }
     if(S.wrong[x.w]){ S.wrong[x.w]--; if(S.wrong[x.w] <= 0) delete S.wrong[x.w]; }
     fb.innerHTML = `<span class="good">${e.kind === 'boss' && left > 0 ? '答對' : '命中'}</span>　<b>${esc(x.w)}</b> <span class="ipa">[${esc(x.ipa)}]</span>　${esc(x.pos)} ${esc(x.zh)}${more}`;
